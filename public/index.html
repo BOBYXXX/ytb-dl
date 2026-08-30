@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ÉCLAT — Téléchargeur YouTube Haute Définition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="grain"></div>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-inner">
+    <div class="logo">
+      <span class="logo-mark"></span>
+      <span class="logo-text">ÉCLAT</span>
+      <span class="logo-sub">STUDIO</span>
+    </div>
+    <div class="nav-links">
+      <span class="nav-tag">Téléchargement haute fidélité</span>
+      <span class="nav-dot"></span>
+      <span class="nav-status">Système opérationnel</span>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-kicker">
+    <span class="kicker-line"></span>
+    <span>Depuis 2024 — Utilisé par 120 000 créateurs</span>
+    <span class="kicker-line"></span>
+  </div>
+  <h1>Téléchargez.<br><em>Sans compromis.</em></h1>
+  <p class="hero-desc">Collez le lien YouTube. Choisissez votre format. <br>Qualité studio, conversion instantanée.</p>
+</header>
+
+<!-- MAIN CARD -->
+<main>
+  <div class="card">
+    <div class="card-top">
+      <div class="card-label">
+        <span class="label-num">01</span>
+        <span>Coller le lien YouTube</span>
+      </div>
+      <span class="card-hint">youtube.com • youtu.be • shorts</span>
+    </div>
+
+    <div class="input-wrap" id="inputWrap">
+      <span class="input-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      </span>
+      <input id="urlInput" type="text" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" spellcheck="false">
+      <button id="pasteBtn" class="paste-btn">Coller</button>
+      <button id="analyzeBtn" class="analyze-btn">
+        <span>Analyser</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+    <div id="inputError" class="input-error"></div>
+
+    <!-- LOADING -->
+    <div id="loading" class="loading hidden">
+      <div class="loading-bar"><div class="loading-progress"></div></div>
+      <span>Analyse de la source — haute résolution en cours...</span>
+    </div>
+
+    <!-- RESULT -->
+    <div id="result" class="result hidden">
+      <div class="result-grid">
+        <div class="thumb-wrap">
+          <img id="thumb" alt="">
+          <span id="duration" class="duration"></span>
+          <div class="thumb-overlay"></div>
+        </div>
+        <div class="meta">
+          <h3 id="videoTitle"></h3>
+          <div class="meta-row">
+            <span id="uploader"></span>
+            <span class="meta-dot">·</span>
+            <span id="views"></span>
+          </div>
+          <div class="meta-id">ID: <span id="videoId"></span></div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="formats-head">
+        <span class="label-num">02</span>
+        <span>Choisir le format & la qualité</span>
+        <span class="formats-count" id="formatsCount"></span>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="video">Vidéo</button>
+        <button class="tab" data-tab="audio">Audio seul</button>
+      </div>
+
+      <div id="videoFormats" class="formats"></div>
+      <div id="audioFormats" class="formats hidden"></div>
+
+      <p class="legal">Usage personnel uniquement. Respectez les droits d'auteur et les conditions d'utilisation de YouTube.</p>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <div class="features">
+    <div class="feat">
+      <span class="feat-icon">◈</span>
+      <h4>Qualité native</h4>
+      <p>Jusqu'à 4K 60fps, sans ré-encodage destructif. Source directe.</p>
+    </div>
+    <div class="feat">
+      <span class="feat-icon">⬢</span>
+      <h4>Tous les formats</h4>
+      <p>MP4, WebM, MKV, MP3, M4A, WAV, OPUS — audio & vidéo séparés ou muxés.</p>
+    </div>
+    <div class="feat">
+      <span class="feat-icon">◎</span>
+      <h4>Privé & rapide</h4>
+      <p>Aucun stockage. Aucun log. Conversion à la volée, fichier supprimé après envoi.</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span>© 2026 ÉCLAT STUDIO — Conçu à Paris</span>
+  <span class="footer-links">Confidentialité · Mentions · Contact</span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
