@@ -189,7 +189,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             except (subprocess.CalledProcessError, FileNotFoundError) as e:
                 err = getattr(e, 'stderr', str(e)) or str(e)
                 print(f"yt-dlp merge failed ({e}), stderr={err[:500]}, retry best mp4")
-                fallback = ["yt-dlp","-f","best[ext=mp4]/best[height<=720]/best","--no-warnings","-o",str(outpath),url]
+                # fallback respecte la hauteur demandée (2160p etc) au lieu de bloquer en 720p
+                h = None
+                try: h = int(str(quality).replace('p','').split()[0])
+                except: h = None
+                if h and h >= 2160: fb = "best[ext=mp4][height<=2160]/best"
+                elif h and h >= 1440: fb = "best[ext=mp4][height<=1440]/best"
+                elif h and h >= 1080: fb = "best[ext=mp4][height<=1080]/best"
+                elif h and h >= 720: fb = "best[ext=mp4][height<=720]/best"
+                else: fb = "best[ext=mp4]/best"
+                fallback = ["yt-dlp","-f",fb,"--no-warnings","-o",str(outpath),url]
                 try:
                     proc2 = subprocess.run(fallback, timeout=300, capture_output=True, text=True)
                     if proc2.returncode != 0:
