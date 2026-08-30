@@ -272,11 +272,10 @@ mainDlBtn.addEventListener('click', async ()=>{
     return;
   }
 
-  // Fallback serveur (si tu veux réactiver plus tard)
+  // Fallback serveur
   mainDlBtn.disabled=true; mainDlBtn.innerHTML='<span>Préparation...</span>';
   progressWrap.classList.remove('hidden');
   progressFill.style.width='0%'; progressFill.classList.add('indeterminate');
-  const needMux = fmt.height && !fmt.hasAudio;
   progressText.textContent= needMux ? 'Muxage vidéo+audio sur le serveur...' : `Conversion ${extToSend.toUpperCase()}...`;
   progressPercent.textContent='...';
   try{
