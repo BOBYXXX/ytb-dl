@@ -219,7 +219,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             err = getattr(e, 'stderr', '') or str(e)
             print(f"download error: {e} stderr={err[:800]}")
-            if not self.wfile.closed: self.json(500, {"error": f"{e}\n{err[:800]}"})
+            if "Sign in to confirm" in err or "not a bot" in err:
+                msg = "Cette vidéo est bloquée par YouTube (anti-bot) sur nos serveurs US. Essaie une autre vidéo, ou passe en MP4 360p/720p direct si dispo. Voir https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"
+                if not self.wfile.closed: self.json(500, {"error": msg})
+            else:
+                if not self.wfile.closed: self.json(500, {"error": f"{e}\n{err[:600]}"})
 
     def json(self, code, obj):
         b=json.dumps(obj, ensure_ascii=False).encode()
