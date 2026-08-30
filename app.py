@@ -27,7 +27,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         elif parsed.path == "/api/download":
             self.handle_download(data)
         else:
-            self.send_error(404)
+            self.json(404, {"error": "Not Found - endpoint inconnu. Vérifie que le backend tourne (Render Web Service, pas Static Site)"})
 
     def handle_info(self, data):
         url = data.get("url","").strip()

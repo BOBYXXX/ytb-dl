@@ -54,13 +54,20 @@ async function analyze(){
   loading.classList.remove('hidden'); result.classList.add('hidden');
   try{
     const res=await fetch('/api/video-info',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url}) });
-    const data=await res.json();
+    const ct = res.headers.get('content-type')||'';
+    let data;
+    if(ct.includes('application/json')) data = await res.json();
+    else {
+      const txt = await res.text();
+      if(txt.includes('Not Found')) throw new Error("Backend non déployé — sur Render choisis 'Web Service' (pas Static Site) et attends 2 min");
+      throw new Error(txt.slice(0,120));
+    }
     if(!res.ok) throw new Error(data.error||'Erreur');
     currentVideo=data; allFormats=data.formats||[];
     render(data);
     result.classList.remove('hidden');
     result.scrollIntoView({behavior:'smooth',block:'start'});
-  }catch(e){ showError(e.message); }
+  }catch(e){ showError(e.message.includes('Unexpected token') ? "Backend non disponible — redéploie sur Render en Web Service" : e.message); }
   finally{ loading.classList.add('hidden'); analyzeBtn.disabled=false; analyzeBtn.innerHTML='<span>Analyser</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>'; }
 }
 
