@@ -45,23 +45,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 fmts=[]
                 seen=set()
                 for f in info.get("formats",[]):
-                    # on garde les mp4 muxés (avec audio) en priorité pour lien direct
                     has_audio = f.get("acodec") != "none"
-                    if f.get("vcodec")!="none" and f.get("height") and f.get("ext") in ("mp4","webm"):
+                    # filtre: seulement https progressive (pas HLS/manifest) pour éviter le bug googlevideo/manifest
+                    proto = f.get("protocol","")
+                    url = f.get("url","")
+                    if proto == "m3u8" or "manifest.googlevideo" in (url or "") or "m3u8" in (url or ""):
+                        continue
+                    if f.get("vcodec")!="none" and f.get("height") and f.get("ext") in ("mp4","webm") and proto in ("https","http"):
                         q=f"{f['height']}p"
-                        # on déduplique par qualité en gardant le muxé si possible
                         key = (q, f.get("ext"))
                         if key not in seen:
                             seen.add(key)
-                            fmts.append({"quality":q,"height":f["height"],"ext":f["ext"],"formatId":f["format_id"],"filesize":f.get("filesize"),"fps":f.get("fps"),"vcodec":f.get("vcodec"),"hasAudio":has_audio,"url": f.get("url"), "protocol": f.get("protocol")})
+                            fmts.append({"quality":q,"height":f["height"],"ext":f["ext"],"formatId":f["format_id"],"filesize":f.get("filesize"),"fps":f.get("fps"),"vcodec":f.get("vcodec"),"hasAudio":has_audio,"url": url, "protocol": proto})
                         elif has_audio:
-                            # remplace la version video-only par la version avec audio
                             for idx, old in enumerate(fmts):
                                 if old["quality"]==q and old["ext"]==f["ext"] and not old.get("hasAudio"):
-                                    fmts[idx]={"quality":q,"height":f["height"],"ext":f["ext"],"formatId":f["format_id"],"filesize":f.get("filesize"),"fps":f.get("fps"),"vcodec":f.get("vcodec"),"hasAudio":True,"url": f.get("url"), "protocol": f.get("protocol")}
+                                    fmts[idx]={"quality":q,"height":f["height"],"ext":f["ext"],"formatId":f["format_id"],"filesize":f.get("filesize"),"fps":f.get("fps"),"vcodec":f.get("vcodec"),"hasAudio":True,"url": url, "protocol": proto}
                                     break
                 fmts.sort(key=lambda x: -x["height"])
-                audios=[{"quality":"Audio uniquement","ext":f.get("ext","m4a"),"formatId":f["format_id"],"filesize":f.get("filesize"),"abr":f.get("abr"),"url": f.get("url")} for f in info.get("formats",[]) if f.get("acodec")!="none" and f.get("vcodec")=="none"]
+                # prioriser les muxés (avec audio) en premier pour que le premier choix marche direct
+                fmts.sort(key=lambda x: (0 if x.get("hasAudio") else 1, -x["height"]))
+                audios=[{"quality":"Audio uniquement","ext":f.get("ext","m4a"),"formatId":f["format_id"],"filesize":f.get("filesize"),"abr":f.get("abr"),"url": f.get("url")} for f in info.get("formats",[]) if f.get("acodec")!="none" and f.get("vcodec")=="none" and f.get("protocol") in ("https","http") and "manifest" not in (f.get("url") or "")]
                 # Ajout MP3 synthétique pour menu déroulant (conversion serveur)
                 if audios:
                     audios.append({"quality":"Audio uniquement","ext":"mp3","formatId":"bestaudio","filesize":None,"abr":320,"url": None})

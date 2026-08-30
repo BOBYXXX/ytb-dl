@@ -12,8 +12,13 @@ const videoTitleEl = $('#videoTitle');
 const uploaderEl = $('#uploader');
 const viewsEl = $('#views');
 const videoIdEl = $('#videoId');
-const extSelect = $('#extSelect');
-const qualitySelect = $('#qualitySelect');
+const extTrigger = $('#extTrigger');
+const extValue = $('#extValue');
+const extDropdown = $('#extDropdown');
+const extWrap = $('#extSelectWrap');
+const qualityTrigger = $('#qualityTrigger');
+const qualityValue = $('#qualityValue');
+const qualityDropdown = $('#qualityDropdown');
 const extHint = $('#extHint');
 const qualityHint = $('#qualityHint');
 const mainDlBtn = $('#mainDlBtn');
@@ -21,6 +26,8 @@ const dlError = $('#dlError');
 
 let currentVideo = null;
 let allFormats = [];
+let selectedExt = 'MP4';
+let selectedQuality = '';
 
 function isValidUrl(v){ return /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/shorts\/)/i.test(v); }
 function formatDuration(s){
@@ -45,6 +52,22 @@ urlInput.addEventListener('input', clearError);
 urlInput.addEventListener('keydown', e=>{ if(e.key==='Enter') analyze(); });
 analyzeBtn.addEventListener('click', analyze);
 
+// custom dropdown logic
+function toggleDropdown(trigger, dropdown){
+  const isOpen = !dropdown.classList.contains('hidden');
+  closeAllDropdowns();
+  if(!isOpen){ dropdown.classList.remove('hidden'); trigger.classList.add('open'); }
+}
+function closeAllDropdowns(){
+  document.querySelectorAll('.cs-dropdown').forEach(d=>d.classList.add('hidden'));
+  document.querySelectorAll('.cs-trigger').forEach(t=>t.classList.remove('open'));
+}
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.custom-select')) closeAllDropdowns();
+});
+extTrigger.addEventListener('click', ()=> toggleDropdown(extTrigger, extDropdown));
+qualityTrigger.addEventListener('click', ()=> toggleDropdown(qualityTrigger, qualityDropdown));
+
 async function analyze(){
   const url=urlInput.value.trim();
   if(!url){ showError("Collez un lien YouTube d'abord."); return; }
@@ -59,7 +82,7 @@ async function analyze(){
     if(ct.includes('application/json')) data = await res.json();
     else {
       const txt = await res.text();
-      if(txt.includes('Not Found')) throw new Error("Backend non déployé — sur Render choisis 'Web Service' (pas Static Site) et attends 2 min");
+      if(txt.includes('Not Found')) throw new Error("Backend non déployé — sur Render choisis 'Web Service'");
       throw new Error(txt.slice(0,120));
     }
     if(!res.ok) throw new Error(data.error||'Erreur');
@@ -79,70 +102,88 @@ function render(data){
   viewsEl.textContent=formatViews(data.viewCount);
   videoIdEl.textContent=data.id;
 
-  // Build extension list
   const exts = [...new Set(allFormats.map(f=>f.ext.toUpperCase()))];
-  // prioriser MP4, MP3, M4A
-  const order = { 'MP4':0, 'WEBM':1, 'M4A':2, 'MP3':3, 'OPUS':4, 'WAV':5 };
+  const order = { 'MP4':0, 'WEBM':1, 'M4A':2, 'MP3':3, 'OPUS':4 };
   exts.sort((a,b)=>(order[a]??99)-(order[b]??99));
 
-  extSelect.innerHTML = exts.map(ext=>{
-    const label = ext==='MP4' ? 'MP4 — Vidéo' : ext==='WEBM' ? 'WEBM — Vidéo' : ext==='MP3' ? 'MP3 — Audio' : ext==='M4A' ? 'M4A — Audio' : ext+' — Audio';
-    return `<option value="${ext}">${label}</option>`;
+  // build ext dropdown
+  extDropdown.innerHTML = exts.map(ext=>{
+    const label = ext==='MP4' ? 'MP4 — Vidéo' : ext==='WEBM' ? 'WEBM — Vidéo' : ext==='MP3' ? 'MP3 — Audio' : ext==='M4A' ? 'M4A — Audio' : ext;
+    const active = ext===selectedExt || (selectedExt==='MP4' && !exts.includes('MP4') && ext===exts[0]);
+    return `<div class="cs-option ${active?'active':''}" data-value="${ext}"><span>${label}</span><small>${ext}</small></div>`;
   }).join('');
+  if(exts.includes('MP4')) selectedExt='MP4'; else selectedExt=exts[0]||'MP4';
+  extValue.textContent = extDropdown.querySelector('.active')?.textContent?.trim() || selectedExt;
 
-  // default to MP4 if exists
-  if(exts.includes('MP4')) extSelect.value='MP4';
+  extDropdown.querySelectorAll('.cs-option').forEach(o=>{
+    o.addEventListener('click', ()=>{
+      selectedExt=o.dataset.value;
+      extDropdown.querySelectorAll('.cs-option').forEach(x=>x.classList.remove('active'));
+      o.classList.add('active');
+      extValue.textContent=o.textContent.trim();
+      closeAllDropdowns();
+      buildQualityOptions();
+    });
+  });
 
-  updateQualityOptions();
-  extSelect.onchange = updateQualityOptions;
-  qualitySelect.onchange = updateHints;
-  updateHints();
+  buildQualityOptions();
 }
 
-function updateQualityOptions(){
-  const ext = extSelect.value.toLowerCase();
+function buildQualityOptions(){
+  const ext = selectedExt.toLowerCase();
   const filtered = allFormats.filter(f=>f.ext.toLowerCase()===ext);
-  // pour MP3 on n'a pas de qualité native, on propose une seule option
   if(filtered.length===0){
-    qualitySelect.innerHTML='<option value="">Aucune qualité</option>';
-    qualitySelect.disabled=true;
-    extHint.textContent=''; qualityHint.textContent='';
+    qualityDropdown.innerHTML='<div class="cs-option">Aucune qualité</div>';
+    qualityValue.textContent='—';
     mainDlBtn.disabled=true;
+    extHint.textContent=''; qualityHint.textContent='';
     return;
   }
-  qualitySelect.disabled=false; mainDlBtn.disabled=false;
+  mainDlBtn.disabled=false;
   const isVideo = filtered.some(f=>f.height);
+  let opts=[];
   if(isVideo){
-    // video: tri par hauteur desc, dédupliquer
     const seen=new Set();
-    const opts=[];
     filtered.filter(f=>f.height).sort((a,b)=>b.height-a.height).forEach(f=>{
       if(!seen.has(f.quality)){ seen.add(f.quality); opts.push(f); }
     });
-    // ajouter audio-only si MP4 n'a pas de mixé ? non, on garde séparé
-    qualitySelect.innerHTML = opts.map(f=>{
-      const tag = f.hasAudio ? 'avec audio' : 'vidéo seule';
-      return `<option value="${f.quality}">${f.quality} — ${f.ext.toUpperCase()} ${f.hasAudio?'✓':''}</option>`;
-    }).join('');
+    // trier muxés en premier
+    opts.sort((a,b)=> (b.hasAudio?1:0)-(a.hasAudio?1:0) || b.height-a.height);
   } else {
-    // audio
-    const opts = filtered.sort((a,b)=>(b.abr||0)-(a.abr||0));
-    qualitySelect.innerHTML = opts.map(f=>{
-      const br = f.abr ? `${Math.round(f.abr)} kbps` : f.quality;
-      return `<option value="${f.formatId}">${br} — ${f.ext.toUpperCase()}</option>`;
-    }).join('');
-    // Si un seul format, on garde quand même
+    opts = filtered.sort((a,b)=>(b.abr||0)-(a.abr||0));
   }
+
+  qualityDropdown.innerHTML = opts.map((f,i)=>{
+    const active = i===0 ? 'active' : '';
+    if(f.height){
+      return `<div class="cs-option ${active}" data-quality="${f.quality}" data-fid="${f.formatId}"><span>${f.quality} ${f.hasAudio?'✓':''}</span><small>${f.ext.toUpperCase()} · ${f.hasAudio?'avec audio':'vidéo seule'}</small></div>`;
+    } else {
+      const br = f.abr ? `${Math.round(f.abr)} kbps` : 'Audio';
+      return `<div class="cs-option ${active}" data-quality="${f.quality}" data-fid="${f.formatId}"><span>${br}</span><small>${f.ext.toUpperCase()}</small></div>`;
+    }
+  }).join('');
+
+  const first = qualityDropdown.querySelector('.cs-option');
+  if(first){ selectedQuality = first.dataset.quality; qualityValue.textContent = first.querySelector('span').textContent.trim(); }
+
+  qualityDropdown.querySelectorAll('.cs-option').forEach(o=>{
+    o.addEventListener('click', ()=>{
+      qualityDropdown.querySelectorAll('.cs-option').forEach(x=>x.classList.remove('active'));
+      o.classList.add('active');
+      selectedQuality=o.dataset.quality;
+      qualityValue.textContent=o.querySelector('span').textContent.trim();
+      closeAllDropdowns();
+      updateHints();
+    });
+  });
   updateHints();
 }
 
 function updateHints(){
-  const ext = extSelect.value.toLowerCase();
-  const q = qualitySelect.value;
-  if(!q){ extHint.textContent=''; qualityHint.textContent=''; return; }
-  const fmt = allFormats.find(f=> f.ext.toLowerCase()===ext && (f.quality===q || f.formatId===q));
+  const ext = selectedExt.toLowerCase();
+  const q = selectedQuality;
+  const fmt = allFormats.find(f=> f.ext.toLowerCase()===ext && f.quality===q) || allFormats.find(f=> f.ext.toLowerCase()===ext);
   if(!fmt){ extHint.textContent=''; qualityHint.textContent=''; return; }
-  // hints
   if(fmt.height){
     extHint.textContent = fmt.hasAudio ? 'Muxé — prêt à télécharger' : 'Vidéo seule — sans son (1080p+)';
     qualityHint.textContent = fmt.filesize ? `${(fmt.filesize/1024/1024).toFixed(1)} Mo · ${fmt.fps||30} fps` : '';
@@ -154,43 +195,23 @@ function updateHints(){
 
 mainDlBtn.addEventListener('click', async ()=>{
   dlError.textContent='';
-  const ext = extSelect.value.toLowerCase();
-  const q = qualitySelect.value;
-  if(!q) return;
-  // trouver le format exact
-  let fmt = allFormats.find(f=> f.ext.toLowerCase()===ext && (f.quality===q || f.formatId===q));
+  if(!selectedQuality){ dlError.textContent='Choisis une qualité.'; return; }
+  const ext = selectedExt.toLowerCase();
+  let fmt = allFormats.find(f=> f.ext.toLowerCase()===ext && f.quality===selectedQuality);
   if(!fmt) fmt = allFormats.find(f=> f.ext.toLowerCase()===ext);
   if(!fmt){ dlError.textContent='Format indisponible.'; return; }
 
-  // si URL directe dispo -> téléchargement même page sans ouvrir onglet
-  if(fmt.url){
-    const safe = (currentVideo.title||'video').replace(/[<>:"/\\|?*]/g,'').slice(0,80).trim() || 'video';
-    const filename = `${safe}.${fmt.ext}`;
-    // technique même page : anchor avec download
-    const a=document.createElement('a');
-    a.href=fmt.url;
-    a.download=filename;
-    a.style.display='none';
-    document.body.appendChild(a);
-    a.click();
-    // fallback si le navigateur bloque le download cross-origin (ouvre quand même sans quitter)
-    setTimeout(()=>a.remove(), 1000);
-    mainDlBtn.innerHTML='<span>✓ Lancement...</span>';
-    setTimeout(()=> mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>', 1500);
-    return;
-  }
-
-  // fallback proxy (ex: MP3 converti ou démo) -> passe par serveur
+  // TOUJOURS via serveur pour rester sur la page (pas de navigation googlevideo)
   mainDlBtn.disabled=true; mainDlBtn.innerHTML='<span>Préparation...</span>';
   try{
     const res=await fetch('/api/download',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ url: urlInput.value.trim(), formatId: fmt.formatId, quality: fmt.quality||fmt.height+'p', filename: currentVideo.title }) });
-    if(!res.ok){ const j=await res.json().catch(()=>({error:'Erreur'})); throw new Error(j.error); }
+    if(!res.ok){ const j=await res.json().catch(()=>({error:'Erreur serveur'})); throw new Error(j.error); }
     const blob=await res.blob();
     const cd=res.headers.get('Content-Disposition');
-    let filename = `${currentVideo.title}.${fmt.ext}`;
+    let filename = `${(currentVideo.title||'video').replace(/[<>:"/\\|?*]/g,'').slice(0,80)}.${fmt.ext}`;
     if(cd){ const m=cd.match(/filename="(.+?)"/); if(m) filename=decodeURIComponent(m[1]); }
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); URL.revokeObjectURL(a.href);
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     mainDlBtn.innerHTML='<span>✓ Téléchargé</span>';
-  }catch(e){ dlError.textContent=e.message; }
-  finally{ setTimeout(()=>{ mainDlBtn.disabled=false; mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'; },2000); }
+  }catch(e){ dlError.textContent=e.message; mainDlBtn.innerHTML='<span>Erreur</span>'; }
+  finally{ setTimeout(()=>{ mainDlBtn.disabled=false; mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'; },1800); }
 });

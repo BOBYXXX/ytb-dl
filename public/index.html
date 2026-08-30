@@ -96,18 +96,18 @@
 
       <div class="select-row">
         <div class="select-wrap">
-          <label for="extSelect">Extension</label>
-          <div class="select-box">
-            <select id="extSelect"></select>
-            <span class="select-arrow">▾</span>
+          <label>Extension</label>
+          <div class="custom-select" id="extSelectWrap">
+            <button type="button" class="cs-trigger" id="extTrigger"><span id="extValue">MP4 — Vidéo</span><span class="cs-arrow">▾</span></button>
+            <div class="cs-dropdown hidden" id="extDropdown"></div>
           </div>
           <span class="select-hint" id="extHint"></span>
         </div>
         <div class="select-wrap">
-          <label for="qualitySelect">Qualité</label>
-          <div class="select-box">
-            <select id="qualitySelect"></select>
-            <span class="select-arrow">▾</span>
+          <label>Qualité</label>
+          <div class="custom-select" id="qualitySelectWrap">
+            <button type="button" class="cs-trigger" id="qualityTrigger"><span id="qualityValue">720p</span><span class="cs-arrow">▾</span></button>
+            <div class="cs-dropdown hidden" id="qualityDropdown"></div>
           </div>
           <span class="select-hint" id="qualityHint"></span>
         </div>
