@@ -37,8 +37,6 @@ const NOTUBE_EXTS = [
   {id:'mp3_hd', label:'MP3 HD', ext:'mp3'},
   {id:'m4a', label:'M4A', ext:'m4a'},
   {id:'mp4', label:'MP4', ext:'mp4'},
-  {id:'mp4_hd', label:'MP4 HD', ext:'mp4'},
-  {id:'mp4_2k', label:'MP4 2K', ext:'mp4'},
   {id:'wav', label:'WAV', ext:'wav'},
   {id:'3gp', label:'3GP', ext:'3gp'},
   {id:'flv', label:'FLV', ext:'flv'},
@@ -154,15 +152,9 @@ function getFormatsForExtId(id){
   const entry = NOTUBE_EXTS.find(x=>x.id===id);
   const ext = entry?.ext || 'mp4';
   let filtered = allFormats.filter(f=>f.ext.toLowerCase()===ext);
-  if(id==='mp4') filtered = filtered.filter(f=>f.height && f.height<=480);
-  if(id==='mp4_hd') filtered = filtered.filter(f=>f.height && f.height>=720 && f.height<=1080);
-  if(id==='mp4_2k') filtered = filtered.filter(f=>f.height && f.height>=1440);
   if(id==='mp3') filtered = filtered.filter(f=> (f.abr||0) <= 192);
   if(id==='mp3_hd') filtered = filtered.filter(f=> (f.abr||0) >= 300 || f.ext==='mp3');
-  if(id==='3gp') filtered = filtered.filter(f=>f.ext==='3gp');
-  if(id==='flv') filtered = filtered.filter(f=>f.ext==='flv');
-  if(id==='wav') filtered = filtered.filter(f=>f.ext==='wav');
-  if(id==='m4a') filtered = filtered.filter(f=>f.ext==='m4a');
+  // MP4: toutes les qualités ensemble (360p → 2160p)
   if(filtered.length===0) filtered = allFormats.filter(f=>f.ext.toLowerCase()===ext);
   return filtered;
 }
