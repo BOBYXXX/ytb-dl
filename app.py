@@ -188,6 +188,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     raise subprocess.CalledProcessError(proc.returncode, cmd, proc.stdout, proc.stderr)
             except (subprocess.CalledProcessError, FileNotFoundError) as e:
                 err = getattr(e, 'stderr', str(e)) or str(e)
+                # si anti-bot, on tente tous les clients l'un après l'autre pour que TOUTES les qualités passent
+                if "Sign in to confirm" in err or "not a bot" in err:
+                    for client in ["android", "ios", "web", "tv", "mweb"]:
+                        try:
+                            fb = ["yt-dlp","-f","best","--no-warnings","--extractor-args",f"youtube:player_client={client}","--geo-bypass","-o",str(outpath),url]
+                            print(f"retry anti-bot avec client={client}")
+                            proc2 = subprocess.run(fb, timeout=300, capture_output=True, text=True)
+                            if proc2.returncode == 0: break
+                            print(f"client {client} failed: {proc2.stderr[:400]}")
+                        except: continue
+                    else:
+                        raise subprocess.CalledProcessError(1, cmd, "", "Toutes les tentatives anti-bot ont échoué")
                 print(f"yt-dlp merge failed ({e}), stderr={err[:800]}, retry best")
                 fallback = ["yt-dlp","-f","best","--no-warnings","--extractor-args","youtube:player_client=android","--geo-bypass","-o",str(outpath),url]
                 try:
