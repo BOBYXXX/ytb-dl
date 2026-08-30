@@ -201,17 +201,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(target.name)}"')
         ctype = "video/mp4" if ext in ("mp4","flv","3gp") else "audio/mpeg" if ext=="mp3" else "audio/mp4" if ext=="m4a" else "audio/wav"
-            self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(target.stat().st_size))
-            self.end_headers()
-            with open(target,"rb") as f: shutil.copyfileobj(f, self.wfile)
-            try: target.unlink()
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(target.stat().st_size))
+        self.end_headers()
+        with open(target,"rb") as f: shutil.copyfileobj(f, self.wfile)
+        try: target.unlink()
+        except: pass
+        # nettoie autres fichiers du même stem
+        for p in DOWNLOADS.glob(f"{safe}.*"):
+            try:
+                if p != target: p.unlink()
             except: pass
-            # nettoie autres fichiers du même stem
-            for p in DOWNLOADS.glob(f"{safe}.*"):
-                try:
-                    if p != target: p.unlink()
-                except: pass
         except Exception as e:
             print(e)
             if not self.wfile.closed: self.json(500, {"error": str(e)})
