@@ -175,27 +175,32 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     # sans ffmpeg: prend le best déjà muxé (22/18) avec son, pas besoin de merge
                     cmd=["yt-dlp","-f","best[ext=mp4]/best","--no-warnings","-o",str(outpath),url]
         try:
+            # capture stderr pour debug Render
+            proc = subprocess.run(cmd, timeout=300, capture_output=True, text=True)
+            if proc.returncode != 0:
+                print(f"yt-dlp fail cmd={cmd} stderr={proc.stderr[:500]}")
+                raise subprocess.CalledProcessError(proc.returncode, cmd, proc.stdout, proc.stderr)
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            err = getattr(e, 'stderr', str(e)) or str(e)
+            print(f"yt-dlp merge failed ({e}), stderr={err[:500]}, retry best mp4")
+            fallback = ["yt-dlp","-f","best[ext=mp4]/best[height<=720]/best","--no-warnings","-o",str(outpath),url]
             try:
-                subprocess.check_call(cmd, timeout=300)
-            except subprocess.CalledProcessError as e:
-                print(f"yt-dlp merge failed ({e}), retry best mp4")
-                # si formatId vient du mock (136 etc) et que la vidéo n'a pas ce format, best est plus sûr
-                fallback = ["yt-dlp","-f","best[ext=mp4]/best[height<=720]/best","--no-warnings","-o",str(outpath),url]
-                subprocess.check_call(fallback, timeout=300)
-            except Exception as e:
-                print(f"yt-dlp error {e}, retry best")
-                fallback = ["yt-dlp","-f","best","--no-warnings","-o",str(outpath),url]
-                subprocess.check_call(fallback, timeout=300)
-            # fichier peut avoir ext différente (conversion) → cherche le fichier créé
-            target = outpath
-            if not target.exists():
-                # cherche par stem
-                cands = list(DOWNLOADS.glob(f"{safe}.*"))
-                if cands: target = max(cands, key=lambda p: p.stat().st_mtime)
-                else: raise FileNotFoundError(f"fichier non créé: {outpath}")
-            self.send_response(200)
-            self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(target.name)}"')
-            ctype = "video/mp4" if ext in ("mp4","flv","3gp") else "audio/mpeg" if ext=="mp3" else "audio/mp4" if ext=="m4a" else "audio/wav"
+                proc2 = subprocess.run(fallback, timeout=300, capture_output=True, text=True)
+                if proc2.returncode != 0:
+                    print(f"fallback also failed: {proc2.stderr[:500]}")
+                    raise subprocess.CalledProcessError(proc2.returncode, fallback, proc2.stdout, proc2.stderr)
+            except FileNotFoundError as fe:
+                raise FileNotFoundError(f"yt-dlp non trouvé: {fe}")
+        # fichier peut avoir ext différente (conversion) → cherche le fichier créé
+        target = outpath
+        if not target.exists():
+            # cherche par stem (yt-dlp peut avoir créé avec autre ext)
+            cands = list(DOWNLOADS.glob(f"{safe}.*"))
+            if cands: target = max(cands, key=lambda p: p.stat().st_mtime)
+            else: raise FileNotFoundError(f"fichier non créé: {outpath}")
+        self.send_response(200)
+        self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(target.name)}"')
+        ctype = "video/mp4" if ext in ("mp4","flv","3gp") else "audio/mpeg" if ext=="mp3" else "audio/mp4" if ext=="m4a" else "audio/wav"
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(target.stat().st_size))
             self.end_headers()
