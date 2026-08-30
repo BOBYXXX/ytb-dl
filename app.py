@@ -175,7 +175,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     # sans ffmpeg: prend le best déjà muxé (22/18) avec son, pas besoin de merge
                     cmd=["yt-dlp","-f","best[ext=mp4]/best","--no-warnings","-o",str(outpath),url]
         try:
-            subprocess.check_call(cmd, timeout=300)
+            try:
+                subprocess.check_call(cmd, timeout=300)
+            except subprocess.CalledProcessError as e:
+                # fallback: si merge échoue (ffmpeg manquant ou format 136 inexistant), prend le best muxé direct
+                print(f"yt-dlp merge failed ({e}), retry best mp4")
+                fallback = ["yt-dlp","-f","best[ext=mp4]/best","--no-warnings","-o",str(outpath),url]
+                subprocess.check_call(fallback, timeout=300)
             # fichier peut avoir ext différente (conversion) → cherche le fichier créé
             target = outpath
             if not target.exists():
