@@ -206,25 +206,46 @@ mainDlBtn.addEventListener('click', async ()=>{
   if(!fmt) fmt = allFormats.find(f=> f.ext.toLowerCase()===ext);
   if(!fmt){ dlError.textContent='Format indisponible.'; return; }
 
+  // Si on a un lien direct googlevideo (pas de conversion MP3), on télécharge côté navigateur directement — 0 bande passante serveur, instantané, reste sur la page via anchor download
+  if(fmt.url && fmt.ext !== 'mp3'){
+    const safe = (currentVideo.title||'video').replace(/[<>:"/\\|?*]/g,'').slice(0,80).trim() || 'video';
+    const filename = `${safe}.${fmt.ext}`;
+    progressWrap.classList.remove('hidden');
+    progressFill.style.width='100%'; progressFill.classList.remove('indeterminate');
+    progressText.textContent='Lancement du téléchargement direct...'; progressPercent.textContent='→ navigateur';
+    // anchor direct qui ne quitte pas la page
+    const a=document.createElement('a');
+    a.href=fmt.url;
+    a.download=filename;
+    a.style.display='none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>a.remove(), 1000);
+    mainDlBtn.innerHTML='<span>✓ Lancé</span>';
+    progressText.textContent='✓ Téléchargement lancé — regarde tes téléchargements (client direct)';
+    setTimeout(()=>{
+      mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+      progressWrap.classList.add('hidden');
+    }, 2500);
+    return;
+  }
+
+  // Fallback: MP3 ou pas de lien direct (conversion) → passe par le serveur avec barre de progression
   mainDlBtn.disabled=true; mainDlBtn.innerHTML='<span>Préparation...</span>';
   progressWrap.classList.remove('hidden');
   progressFill.style.width='0%'; progressFill.classList.add('indeterminate');
-  progressText.textContent='Préparation sur le serveur (yt-dlp)...'; progressPercent.textContent='...';
+  progressText.textContent='Préparation sur le serveur (conversion)...'; progressPercent.textContent='...';
 
   try{
     const res=await fetch('/api/download',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ url: urlInput.value.trim(), formatId: fmt.formatId, quality: fmt.quality||fmt.height+'p', filename: currentVideo.title }) });
     if(!res.ok){ const j=await res.json().catch(()=>({error:'Erreur serveur'})); throw new Error(j.error); }
-
-    // phase 2: téléchargement vers le navigateur avec progression réelle
     progressFill.classList.remove('indeterminate');
     progressText.textContent='Téléchargement vers ton navigateur...';
     const total = parseInt(res.headers.get('Content-Length')||'0',10);
     const cd=res.headers.get('Content-Disposition');
     let filename = `${(currentVideo.title||'video').replace(/[<>:"/\\|?*]/g,'').slice(0,80)}.${fmt.ext}`;
     if(cd){ const m=cd.match(/filename="(.+?)"/); if(m) filename=decodeURIComponent(m[1]); }
-
     if(!res.body || !total){
-      // fallback sans stream
       const blob=await res.blob();
       progressFill.style.width='100%'; progressPercent.textContent='100%';
       const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
@@ -242,14 +263,13 @@ mainDlBtn.addEventListener('click', async ()=>{
       progressFill.style.width='100%'; progressPercent.textContent='100%';
       const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     }
-    progressText.textContent='✓ Terminé — regarde tes téléchargements';
+    progressText.textContent='✓ Terminé';
     mainDlBtn.innerHTML='<span>✓ Téléchargé</span>';
   }catch(e){ dlError.textContent=e.message; progressText.textContent='Erreur'; mainDlBtn.innerHTML='<span>Erreur</span>'; }
   finally{
     setTimeout(()=>{
       mainDlBtn.disabled=false;
       mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
-      // laisse la barre 2s puis cache
       setTimeout(()=>progressWrap.classList.add('hidden'), 2500);
     },1200);
   }
