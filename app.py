@@ -188,18 +188,33 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     raise subprocess.CalledProcessError(proc.returncode, cmd, proc.stdout, proc.stderr)
             except (subprocess.CalledProcessError, FileNotFoundError) as e:
                 err = getattr(e, 'stderr', str(e)) or str(e)
-                # si anti-bot, on tente tous les clients l'un après l'autre pour que TOUTES les qualités passent
                 if "Sign in to confirm" in err or "not a bot" in err:
-                    for client in ["android", "ios", "web", "tv", "mweb"]:
-                        try:
-                            fb = ["yt-dlp","-f","best","--no-warnings","--extractor-args",f"youtube:player_client={client}","--geo-bypass","-o",str(outpath),url]
-                            print(f"retry anti-bot avec client={client}")
-                            proc2 = subprocess.run(fb, timeout=300, capture_output=True, text=True)
-                            if proc2.returncode == 0: break
-                            print(f"client {client} failed: {proc2.stderr[:400]}")
-                        except: continue
-                    else:
-                        raise subprocess.CalledProcessError(1, cmd, "", "Toutes les tentatives anti-bot ont échoué")
+                    # fallback Cobalt (bypass anti-bot, toutes qualités)
+                    try:
+                        import urllib.request as _ul
+                        h = str(quality).replace('p','').strip()
+                        vq = h if h in ("2160","1440","1080","720","480","360") else "720"
+                        cobalt_body = json.dumps({"url": url, "vCodec":"h264","vQuality":vq,"aFormat":"mp3","isAudioOnly": ext in ("mp3","m4a","wav")}).encode()
+                        req = _ul.Request("https://api.cobalt.tools/api/json", data=cobalt_body, headers={"Content-Type":"application/json","Accept":"application/json"}, method="POST")
+                        with _ul.urlopen(req, timeout=20) as r:
+                            j = json.loads(r.read().decode())
+                        durl = j.get("url")
+                        if durl:
+                            print(f"cobalt success q={vq} url={durl[:80]}")
+                            # proxy le fichier Cobalt vers le navigateur (reste sur la page + explorateur, avec son, toutes qualités)
+                            with _ul.urlopen(durl, timeout=60) as vr:
+                                self.send_response(200)
+                                self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(safe)}.{ext}"')
+                                ctype = "video/mp4" if ext in ("mp4","flv","3gp") else "audio/mpeg"
+                                self.send_header("Content-Type", ctype)
+                                clen = vr.headers.get("Content-Length")
+                                if clen: self.send_header("Content-Length", clen)
+                                self.end_headers()
+                                shutil.copyfileobj(vr, self.wfile)
+                            return
+                        print(f"cobalt fallback failed: {j}")
+                    except Exception as ce:
+                        print(f"cobalt error: {ce}")
                 print(f"yt-dlp merge failed ({e}), stderr={err[:800]}, retry best")
                 fallback = ["yt-dlp","-f","best","--no-warnings","--extractor-args","youtube:player_client=android","--geo-bypass","-o",str(outpath),url]
                 try:
