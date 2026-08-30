@@ -15,7 +15,6 @@ const videoIdEl = $('#videoId');
 const extTrigger = $('#extTrigger');
 const extValue = $('#extValue');
 const extDropdown = $('#extDropdown');
-const extWrap = $('#extSelectWrap');
 const qualityTrigger = $('#qualityTrigger');
 const qualityValue = $('#qualityValue');
 const qualityDropdown = $('#qualityDropdown');
@@ -23,11 +22,27 @@ const extHint = $('#extHint');
 const qualityHint = $('#qualityHint');
 const mainDlBtn = $('#mainDlBtn');
 const dlError = $('#dlError');
+const progressWrap = $('#progressWrap');
+const progressFill = $('#progressFill');
+const progressText = $('#progressText');
+const progressPercent = $('#progressPercent');
 
 let currentVideo = null;
 let allFormats = [];
-let selectedExt = 'MP4';
+let selectedExtId = 'mp4'; // mp3, mp3_hd, m4a, mp4, mp4_hd, mp4_2k, wav, 3gp, flv
 let selectedQuality = '';
+
+const NOTUBE_EXTS = [
+  {id:'mp3', label:'MP3', ext:'mp3'},
+  {id:'mp3_hd', label:'MP3 HD', ext:'mp3'},
+  {id:'m4a', label:'M4A', ext:'m4a'},
+  {id:'mp4', label:'MP4', ext:'mp4'},
+  {id:'mp4_hd', label:'MP4 HD', ext:'mp4'},
+  {id:'mp4_2k', label:'MP4 2K', ext:'mp4'},
+  {id:'wav', label:'WAV', ext:'wav'},
+  {id:'3gp', label:'3GP', ext:'3gp'},
+  {id:'flv', label:'FLV', ext:'flv'},
+];
 
 function isValidUrl(v){ return /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/shorts\/)/i.test(v); }
 function formatDuration(s){
@@ -52,7 +67,6 @@ urlInput.addEventListener('input', clearError);
 urlInput.addEventListener('keydown', e=>{ if(e.key==='Enter') analyze(); });
 analyzeBtn.addEventListener('click', analyze);
 
-// custom dropdown logic
 function toggleDropdown(trigger, dropdown){
   const isOpen = !dropdown.classList.contains('hidden');
   closeAllDropdowns();
@@ -87,14 +101,15 @@ async function analyze(){
     }
     if(!res.ok) throw new Error(data.error||'Erreur');
     currentVideo=data; allFormats=data.formats||[];
-    render(data);
+    render();
     result.classList.remove('hidden');
     result.scrollIntoView({behavior:'smooth',block:'start'});
   }catch(e){ showError(e.message.includes('Unexpected token') ? "Backend non disponible — redéploie sur Render en Web Service" : e.message); }
   finally{ loading.classList.add('hidden'); analyzeBtn.disabled=false; analyzeBtn.innerHTML='<span>Analyser</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>'; }
 }
 
-function render(data){
+function render(){
+  const data=currentVideo;
   thumb.src=data.thumbnail||''; thumb.alt=data.title;
   durationEl.textContent=formatDuration(data.duration);
   videoTitleEl.textContent=data.title;
@@ -102,41 +117,50 @@ function render(data){
   viewsEl.textContent=formatViews(data.viewCount);
   videoIdEl.textContent=data.id;
 
-  const exts = [...new Set(allFormats.map(f=>f.ext.toUpperCase()))];
-  const order = { 'MP4':0, 'WEBM':1, 'M4A':2, 'MP3':3, 'OPUS':4 };
-  exts.sort((a,b)=>(order[a]??99)-(order[b]??99));
-
-  // build ext dropdown
-  extDropdown.innerHTML = exts.map(ext=>{
-    const label = ext==='MP4' ? 'MP4 — Vidéo' : ext==='WEBM' ? 'WEBM — Vidéo' : ext==='MP3' ? 'MP3 — Audio' : ext==='M4A' ? 'M4A — Audio' : ext;
-    const active = ext===selectedExt || (selectedExt==='MP4' && !exts.includes('MP4') && ext===exts[0]);
-    return `<div class="cs-option ${active?'active':''}" data-value="${ext}"><span>${label}</span><small>${ext}</small></div>`;
+  // build ext dropdown Notube-like
+  extDropdown.innerHTML = NOTUBE_EXTS.map(o=>{
+    const active = o.id===selectedExtId ? 'active' : '';
+    return `<div class="cs-option ${active}" data-id="${o.id}" data-ext="${o.ext}"><span>${o.label}</span><small>${o.ext.toUpperCase()}</small></div>`;
   }).join('');
-  if(exts.includes('MP4')) selectedExt='MP4'; else selectedExt=exts[0]||'MP4';
-  extValue.textContent = extDropdown.querySelector('.active')?.textContent?.trim() || selectedExt;
-
+  extValue.textContent = NOTUBE_EXTS.find(x=>x.id===selectedExtId)?.label || 'MP4';
   extDropdown.querySelectorAll('.cs-option').forEach(o=>{
     o.addEventListener('click', ()=>{
-      selectedExt=o.dataset.value;
+      selectedExtId=o.dataset.id;
       extDropdown.querySelectorAll('.cs-option').forEach(x=>x.classList.remove('active'));
       o.classList.add('active');
-      extValue.textContent=o.textContent.trim();
+      extValue.textContent=o.querySelector('span').textContent.trim();
       closeAllDropdowns();
       buildQualityOptions();
     });
   });
-
   buildQualityOptions();
 }
 
+function getFormatsForExtId(id){
+  const entry = NOTUBE_EXTS.find(x=>x.id===id);
+  const ext = entry?.ext || 'mp4';
+  let filtered = allFormats.filter(f=>f.ext.toLowerCase()===ext);
+  // filtrage Notube-like par qualité
+  if(id==='mp4') filtered = filtered.filter(f=>f.height && f.height<=480);
+  if(id==='mp4_hd') filtered = filtered.filter(f=>f.height && f.height>=720 && f.height<=1080);
+  if(id==='mp4_2k') filtered = filtered.filter(f=>f.height && f.height>=1440);
+  if(id==='mp3') filtered = filtered.filter(f=> (f.abr||0) <= 192);
+  if(id==='mp3_hd') filtered = filtered.filter(f=> (f.abr||0) >= 300 || f.ext==='mp3');
+  if(id==='3gp') filtered = filtered.filter(f=>f.ext==='3gp');
+  if(id==='flv') filtered = filtered.filter(f=>f.ext==='flv');
+  if(id==='wav') filtered = filtered.filter(f=>f.ext==='wav');
+  if(id==='m4a') filtered = filtered.filter(f=>f.ext==='m4a');
+  // fallback si filtre vide → prend tous du même ext
+  if(filtered.length===0) filtered = allFormats.filter(f=>f.ext.toLowerCase()===ext);
+  return filtered;
+}
+
 function buildQualityOptions(){
-  const ext = selectedExt.toLowerCase();
-  const filtered = allFormats.filter(f=>f.ext.toLowerCase()===ext);
+  const filtered = getFormatsForExtId(selectedExtId);
   if(filtered.length===0){
     qualityDropdown.innerHTML='<div class="cs-option">Aucune qualité</div>';
-    qualityValue.textContent='—';
-    mainDlBtn.disabled=true;
-    extHint.textContent=''; qualityHint.textContent='';
+    qualityValue.textContent='—'; selectedQuality='';
+    mainDlBtn.disabled=true; extHint.textContent=''; qualityHint.textContent='';
     return;
   }
   mainDlBtn.disabled=false;
@@ -147,25 +171,21 @@ function buildQualityOptions(){
     filtered.filter(f=>f.height).sort((a,b)=>b.height-a.height).forEach(f=>{
       if(!seen.has(f.quality)){ seen.add(f.quality); opts.push(f); }
     });
-    // trier muxés en premier
     opts.sort((a,b)=> (b.hasAudio?1:0)-(a.hasAudio?1:0) || b.height-a.height);
   } else {
     opts = filtered.sort((a,b)=>(b.abr||0)-(a.abr||0));
   }
-
   qualityDropdown.innerHTML = opts.map((f,i)=>{
     const active = i===0 ? 'active' : '';
     if(f.height){
-      return `<div class="cs-option ${active}" data-quality="${f.quality}" data-fid="${f.formatId}"><span>${f.quality} ${f.hasAudio?'✓':''}</span><small>${f.ext.toUpperCase()} · ${f.hasAudio?'avec audio':'vidéo seule'}</small></div>`;
+      return `<div class="cs-option ${active}" data-quality="${f.quality}" data-fid="${f.formatId}" data-ext="${f.ext}"><span>${f.quality} ${f.hasAudio?'✓':''}</span><small>${f.ext.toUpperCase()} · ${f.hasAudio?'avec audio':'vidéo seule'}</small></div>`;
     } else {
       const br = f.abr ? `${Math.round(f.abr)} kbps` : 'Audio';
-      return `<div class="cs-option ${active}" data-quality="${f.quality}" data-fid="${f.formatId}"><span>${br}</span><small>${f.ext.toUpperCase()}</small></div>`;
+      return `<div class="cs-option ${active}" data-quality="${f.quality}" data-fid="${f.formatId}" data-ext="${f.ext}"><span>${br}</span><small>${f.ext.toUpperCase()}</small></div>`;
     }
   }).join('');
-
   const first = qualityDropdown.querySelector('.cs-option');
   if(first){ selectedQuality = first.dataset.quality; qualityValue.textContent = first.querySelector('span').textContent.trim(); }
-
   qualityDropdown.querySelectorAll('.cs-option').forEach(o=>{
     o.addEventListener('click', ()=>{
       qualityDropdown.querySelectorAll('.cs-option').forEach(x=>x.classList.remove('active'));
@@ -180,106 +200,77 @@ function buildQualityOptions(){
 }
 
 function updateHints(){
-  const ext = selectedExt.toLowerCase();
-  const q = selectedQuality;
-  const fmt = allFormats.find(f=> f.ext.toLowerCase()===ext && f.quality===q) || allFormats.find(f=> f.ext.toLowerCase()===ext);
+  const filtered = getFormatsForExtId(selectedExtId);
+  const fmt = filtered.find(f=> f.quality===selectedQuality) || filtered[0];
   if(!fmt){ extHint.textContent=''; qualityHint.textContent=''; return; }
+  const id = selectedExtId;
   if(fmt.height){
-    extHint.textContent = fmt.hasAudio ? 'Muxé — prêt à télécharger' : 'Vidéo seule — sans son (1080p+)';
-    qualityHint.textContent = fmt.filesize ? `${(fmt.filesize/1024/1024).toFixed(1)} Mo · ${fmt.fps||30} fps` : '';
+    if(id==='mp4') extHint.textContent='MP4 standard — 360p/480p';
+    else if(id==='mp4_hd') extHint.textContent= fmt.hasAudio ? 'MP4 HD — avec audio' : 'Vidéo seule — sera muxé avec son';
+    else if(id==='mp4_2k') extHint.textContent='MP4 2K — 1440p/2160p';
+    else if(id==='flv') extHint.textContent='FLV — compatible ancien';
+    else if(id==='3gp') extHint.textContent='3GP — mobile';
+    else extHint.textContent = fmt.hasAudio ? 'Muxé' : 'Vidéo seule';
+    qualityHint.textContent = fmt.filesize ? `${(fmt.filesize/1024/1024).toFixed(1)} Mo · ${fmt.fps||30}fps` : '';
   } else {
-    extHint.textContent = 'Audio seul';
+    if(id==='mp3') extHint.textContent='MP3 192 kbps';
+    else if(id==='mp3_hd') extHint.textContent='MP3 HD 320 kbps';
+    else if(id==='wav') extHint.textContent='WAV sans perte';
+    else extHint.textContent='Audio seul';
     qualityHint.textContent = fmt.filesize ? `${(fmt.filesize/1024/1024).toFixed(1)} Mo` : '';
   }
 }
 
-const progressWrap = $('#progressWrap');
-const progressFill = $('#progressFill');
-const progressText = $('#progressText');
-const progressPercent = $('#progressPercent');
-
 mainDlBtn.addEventListener('click', async ()=>{
   dlError.textContent='';
   if(!selectedQuality){ dlError.textContent='Choisis une qualité.'; return; }
-  const ext = selectedExt.toLowerCase();
-  let fmt = allFormats.find(f=> f.ext.toLowerCase()===ext && f.quality===selectedQuality);
-  if(!fmt) fmt = allFormats.find(f=> f.ext.toLowerCase()===ext);
+  const filtered = getFormatsForExtId(selectedExtId);
+  let fmt = filtered.find(f=> f.quality===selectedQuality);
+  if(!fmt) fmt = filtered[0];
   if(!fmt){ dlError.textContent='Format indisponible.'; return; }
+  const extToSend = NOTUBE_EXTS.find(x=>x.id===selectedExtId)?.ext || fmt.ext;
 
-  // Si muxé (720p/480p avec son) et lien direct dispo → direct client (rapide, 0 bande passante serveur)
-  // Sinon (1080p vidéo seule ou MP3) → passe par le serveur pour merger et rester sur la page avec explorateur
-  if(fmt.url && fmt.hasAudio && fmt.ext !== 'mp3'){
+  // Direct client si muxé et URL dispo (MP4/WebM/M4A) → 0 bande passante serveur
+  if(fmt.url && fmt.hasAudio && !['mp3','wav','flv','3gp'].includes(extToSend)){
     const safe = (currentVideo.title||'video').replace(/[<>:"/\\|?*]/g,'').slice(0,80).trim() || 'video';
     const filename = `${safe}.${fmt.ext}`;
     progressWrap.classList.remove('hidden');
     progressFill.style.width='100%'; progressFill.classList.remove('indeterminate');
-    progressText.textContent='Lancement du téléchargement direct...'; progressPercent.textContent='→ navigateur';
-    // technique qui reste sur la page: iframe caché + anchor download (évite l'ouverture manifest.googlevideo)
-    const iframe=document.createElement('iframe');
-    iframe.style.display='none';
-    iframe.src=fmt.url;
-    document.body.appendChild(iframe);
-    // aussi anchor pour forcer le Save As (file explorer) sans quitter la page
-    const a=document.createElement('a');
-    a.href=fmt.url;
-    a.download=filename;
-    a.rel='noopener';
-    a.style.display='none';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(()=>{ try{iframe.remove();}catch{}; a.remove(); }, 1500);
+    progressText.textContent='Lancement direct...'; progressPercent.textContent='→ navigateur';
+    const iframe=document.createElement('iframe'); iframe.style.display='none'; iframe.src=fmt.url; document.body.appendChild(iframe);
+    const a=document.createElement('a'); a.href=fmt.url; a.download=filename; a.rel='noopener'; a.style.display='none'; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ try{iframe.remove();}catch{}; a.remove(); },1500);
     mainDlBtn.innerHTML='<span>✓ Lancé</span>';
-    progressText.textContent='✓ Si une nouvelle page s\'ouvre, ferme-la — le téléchargement est lancé';
-    setTimeout(()=>{
-      mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
-      progressWrap.classList.add('hidden');
-    }, 3000);
+    progressText.textContent='✓ Téléchargement lancé';
+    setTimeout(()=>{ mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'; progressWrap.classList.add('hidden'); },3000);
     return;
   }
 
-  // Fallback serveur: 1080p/4K vidéo seule (nécessite merge audio), MP3, ou pas de lien direct → reste sur la page + explorateur de fichiers via blob
+  // Fallback serveur (conversion FLV/3GP/WAV/MP3 ou 1080p vidéo seule)
   mainDlBtn.disabled=true; mainDlBtn.innerHTML='<span>Préparation...</span>';
   progressWrap.classList.remove('hidden');
   progressFill.style.width='0%'; progressFill.classList.add('indeterminate');
-  const isMuxNeeded = fmt.height && !fmt.hasAudio;
-  progressText.textContent= isMuxNeeded ? 'Muxage vidéo+audio sur le serveur (1080p avec son)...' : 'Préparation sur le serveur (conversion)...';
+  const needMux = fmt.height && !fmt.hasAudio;
+  progressText.textContent= needMux ? 'Muxage vidéo+audio sur le serveur...' : `Conversion ${extToSend.toUpperCase()}...`;
   progressPercent.textContent='...';
-
   try{
-    const res=await fetch('/api/download',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ url: urlInput.value.trim(), formatId: fmt.formatId, quality: fmt.quality||fmt.height+'p', filename: currentVideo.title }) });
+    const res=await fetch('/api/download',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ url: urlInput.value.trim(), formatId: fmt.formatId, quality: fmt.quality||fmt.height+'p', filename: currentVideo.title, ext: extToSend }) });
     if(!res.ok){ const j=await res.json().catch(()=>({error:'Erreur serveur'})); throw new Error(j.error); }
-    progressFill.classList.remove('indeterminate');
-    progressText.textContent='Téléchargement vers ton navigateur...';
+    progressFill.classList.remove('indeterminate'); progressText.textContent='Téléchargement...';
     const total = parseInt(res.headers.get('Content-Length')||'0',10);
     const cd=res.headers.get('Content-Disposition');
-    let filename = `${(currentVideo.title||'video').replace(/[<>:"/\\|?*]/g,'').slice(0,80)}.${fmt.ext}`;
+    let filename = `${(currentVideo.title||'video').replace(/[<>:"/\\|?*]/g,'').slice(0,80)}.${extToSend}`;
     if(cd){ const m=cd.match(/filename="(.+?)"/); if(m) filename=decodeURIComponent(m[1]); }
     if(!res.body || !total){
-      const blob=await res.blob();
-      progressFill.style.width='100%'; progressPercent.textContent='100%';
-      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      const blob=await res.blob(); progressFill.style.width='100%'; progressPercent.textContent='100%';
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
     } else {
-      const reader=res.body.getReader();
-      const chunks=[]; let received=0;
-      while(true){
-        const {done,value}=await reader.read();
-        if(done) break;
-        chunks.push(value); received+=value.length;
-        const pct=Math.round((received/total)*100);
-        progressFill.style.width=pct+'%'; progressPercent.textContent=pct+'%';
-      }
-      const blob=new Blob(chunks);
-      progressFill.style.width='100%'; progressPercent.textContent='100%';
-      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      const reader=res.body.getReader(); const chunks=[]; let received=0;
+      while(true){ const {done,value}=await reader.read(); if(done) break; chunks.push(value); received+=value.length; const pct=Math.round((received/total)*100); progressFill.style.width=pct+'%'; progressPercent.textContent=pct+'%'; }
+      const blob=new Blob(chunks); progressFill.style.width='100%'; progressPercent.textContent='100%';
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
     }
-    progressText.textContent='✓ Terminé';
-    mainDlBtn.innerHTML='<span>✓ Téléchargé</span>';
+    progressText.textContent='✓ Terminé'; mainDlBtn.innerHTML='<span>✓ Téléchargé</span>';
   }catch(e){ dlError.textContent=e.message; progressText.textContent='Erreur'; mainDlBtn.innerHTML='<span>Erreur</span>'; }
-  finally{
-    setTimeout(()=>{
-      mainDlBtn.disabled=false;
-      mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
-      setTimeout(()=>progressWrap.classList.add('hidden'), 2500);
-    },1200);
-  }
+  finally{ setTimeout(()=>{ mainDlBtn.disabled=false; mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'; setTimeout(()=>progressWrap.classList.add('hidden'),2500); },1200); }
 });

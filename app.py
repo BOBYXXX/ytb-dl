@@ -66,10 +66,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 # prioriser les muxés (avec audio) en premier pour que le premier choix marche direct
                 fmts.sort(key=lambda x: (0 if x.get("hasAudio") else 1, -x["height"]))
                 audios=[{"quality":"Audio uniquement","ext":f.get("ext","m4a"),"formatId":f["format_id"],"filesize":f.get("filesize"),"abr":f.get("abr"),"url": f.get("url")} for f in info.get("formats",[]) if f.get("acodec")!="none" and f.get("vcodec")=="none" and f.get("protocol") in ("https","http") and "manifest" not in (f.get("url") or "")]
-                # Ajout MP3 synthétique pour menu déroulant (conversion serveur)
+                # Extensions Notube-like (conversion serveur si besoin)
                 if audios:
-                    audios.append({"quality":"Audio uniquement","ext":"mp3","formatId":"bestaudio","filesize":None,"abr":320,"url": None})
-                return self.json(200, {"id":vid,"title":info.get("title"),"thumbnail":info.get("thumbnail"),"duration":info.get("duration"),"uploader":info.get("uploader"),"viewCount":info.get("view_count"),"formats":fmts+audios, "direct": True})
+                    audios.append({"quality":"Audio uniquement","ext":"mp3","formatId":"bestaudio","filesize":None,"abr":192,"url": None})
+                    audios.append({"quality":"Audio HD","ext":"mp3","formatId":"bestaudio","filesize":None,"abr":320,"url": None})
+                    audios.append({"quality":"Audio WAV","ext":"wav","formatId":"bestaudio","filesize":None,"abr":1411,"url": None})
+                # FLV / 3GP / WAV dérivés des MP4 existants (synthétiques)
+                synth=[]
+                for f in fmts:
+                    if f["height"] <= 720:
+                        synth.append({**f, "ext":"flv", "formatId": f["formatId"], "url": None})
+                    if f["height"] <= 360:
+                        synth.append({**f, "ext":"3gp", "formatId": f["formatId"], "url": None})
+                # MP4 / MP4 HD / MP4 2K sont des vues filtrées côté frontend, pas besoin de dupliquer
+                all_fmts = fmts + synth + audios
+                return self.json(200, {"id":vid,"title":info.get("title"),"thumbnail":info.get("thumbnail"),"duration":info.get("duration"),"uploader":info.get("uploader"),"viewCount":info.get("view_count"),"formats":all_fmts, "direct": True})
             except Exception as e:
                 print("yt-dlp error:", e)
                 # fallback to mock still with real title if possible
@@ -84,36 +95,93 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 uploader=oe.get("author_name","")
         except:
             title=f"Vidéo {vid}"; thumb=f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"; uploader=""
-        mock=[{"quality":"1080p","height":1080,"ext":"mp4","formatId":"137","filesize":85000000,"fps":30,"hasAudio":False,"url": None},{"quality":"720p","height":720,"ext":"mp4","formatId":"136","filesize":45000000,"fps":30,"hasAudio":True,"url": None},{"quality":"480p","height":480,"ext":"mp4","formatId":"135","filesize":22000000,"fps":30,"hasAudio":True,"url": None},{"quality":"360p","height":360,"ext":"mp4","formatId":"134","filesize":12000000,"fps":30,"hasAudio":True,"url": None}]
-        audios=[{"quality":"Audio uniquement","ext":"m4a","formatId":"140","filesize":5000000,"abr":128,"url": None},{"quality":"Audio uniquement","ext":"mp3","formatId":"bestaudio","filesize":5000000,"abr":320,"url": None}]
+        mock=[
+            {"quality":"2160p","height":2160,"ext":"mp4","formatId":"313","filesize":180000000,"fps":30,"hasAudio":False,"url": None},
+            {"quality":"1440p","height":1440,"ext":"mp4","formatId":"308","filesize":120000000,"fps":30,"hasAudio":False,"url": None},
+            {"quality":"1080p","height":1080,"ext":"mp4","formatId":"137","filesize":85000000,"fps":30,"hasAudio":False,"url": None},
+            {"quality":"720p","height":720,"ext":"mp4","formatId":"136","filesize":45000000,"fps":30,"hasAudio":True,"url": None},
+            {"quality":"480p","height":480,"ext":"mp4","formatId":"135","filesize":22000000,"fps":30,"hasAudio":True,"url": None},
+            {"quality":"360p","height":360,"ext":"mp4","formatId":"134","filesize":12000000,"fps":30,"hasAudio":True,"url": None}
+        ]
+        mock_synth=[]
+        for f in mock:
+            if f["height"] <= 720: mock_synth.append({**f, "ext":"flv", "url": None})
+            if f["height"] <= 360: mock_synth.append({**f, "ext":"3gp", "url": None})
+        audios=[
+            {"quality":"Audio uniquement","ext":"m4a","formatId":"140","filesize":5000000,"abr":128,"url": None},
+            {"quality":"Audio uniquement","ext":"mp3","formatId":"bestaudio","filesize":4200000,"abr":192,"url": None},
+            {"quality":"Audio HD","ext":"mp3","formatId":"bestaudio","filesize":6500000,"abr":320,"url": None},
+            {"quality":"Audio WAV","ext":"wav","formatId":"bestaudio","filesize":25000000,"abr":1411,"url": None}
+        ]
+        mock = mock + mock_synth
         note = "Mode démo — installe yt-dlp pour le téléchargement réel (voir README)" if not shutil.which("yt-dlp") else None
         payload={"id":vid,"title":title,"thumbnail":thumb,"duration":None,"uploader":uploader,"viewCount":None,"formats":mock+audios}
         if note: payload["demo"]=True; payload["note"]=note
         return self.json(200, payload)
 
     def handle_download(self, data):
-        url=data.get("url",""); fmt=data.get("formatId",""); quality=data.get("quality",""); fname=data.get("filename","video")
+        url=data.get("url",""); fmt=data.get("formatId",""); quality=data.get("quality",""); fname=data.get("filename","video"); req_ext=(data.get("ext") or "").lower()
         if not url or not fmt: return self.json(400, {"error":"URL et formatId requis"})
         vid=extract_id(url)
         if not vid: return self.json(400, {"error":"URL invalide"})
         if not shutil.which("yt-dlp"):
             return self.json(500, {"error":"yt-dlp non installé. Installe-le : winget install yt-dlp  ou  pip install yt-dlp"})
         safe=sanitize(fname)
-        ext="m4a" if quality=="Audio uniquement" else "mp4"
+        # extension demandée (MP3, MP3 HD, M4A, MP4, MP4 HD, MP4 2K, WAV, 3GP, FLV)
+        # mapping Notube-like
+        if req_ext in ("mp3","m4a","wav","flv","3gp","mp4"):
+            ext=req_ext
+        else:
+            ext="m4a" if "Audio" in (quality or "") else "mp4"
+        # pour FLV/3GP/WAV on force la conversion
         outpath=DOWNLOADS / f"{safe}.{ext}"
-        selector=fmt if quality=="Audio uniquement" else f"{fmt}+bestaudio[ext=m4a]/best"
-        cmd=["yt-dlp","-f",selector,"--merge-output-format","mp4","--no-warnings","-o",str(outpath),url]
+        # sélecteur yt-dlp
+        if ext in ("mp3","m4a","wav"):
+            # audio
+            if ext=="mp3": selector=fmt
+            elif ext=="wav": selector=fmt
+            else: selector=fmt
+            # yt-dlp gère --extract-audio via postprocessor, mais on utilise -f bestaudio + conversion
+            cmd=["yt-dlp","-f",selector,"--no-warnings","-o",str(outpath.with_suffix(f".%(ext)s")),url]
+            # post-traitement selon ext (on laisse yt-dlp choisir, puis on renomme)
+            if ext=="mp3":
+                cmd += ["--extract-audio","--audio-format","mp3","--audio-quality","0" if "HD" in (quality or "") else "192K"]
+            elif ext=="wav":
+                cmd += ["--extract-audio","--audio-format","wav"]
+            elif ext=="m4a":
+                cmd += ["--extract-audio","--audio-format","m4a"]
+        else:
+            # video: FLV/3GP/MP4
+            selector=fmt if fmt=="bestaudio" else f"{fmt}+bestaudio/best"
+            if ext=="flv":
+                cmd=["yt-dlp","-f",selector,"--merge-output-format","flv","--recode-video","flv","--no-warnings","-o",str(outpath),url]
+            elif ext=="3gp":
+                cmd=["yt-dlp","-f",selector,"--merge-output-format","3gp","--recode-video","3gp","--no-warnings","-o",str(outpath),url]
+            else:
+                cmd=["yt-dlp","-f",selector,"--merge-output-format","mp4","--no-warnings","-o",str(outpath),url]
         try:
             subprocess.check_call(cmd, timeout=300)
-            if not outpath.exists(): raise FileNotFoundError
+            # fichier peut avoir ext différente (conversion) → cherche le fichier créé
+            target = outpath
+            if not target.exists():
+                # cherche par stem
+                cands = list(DOWNLOADS.glob(f"{safe}.*"))
+                if cands: target = max(cands, key=lambda p: p.stat().st_mtime)
+                else: raise FileNotFoundError(f"fichier non créé: {outpath}")
             self.send_response(200)
-            self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(outpath.name)}"')
-            self.send_header("Content-Type", "video/mp4" if ext=="mp4" else "audio/mp4")
-            self.send_header("Content-Length", str(outpath.stat().st_size))
+            self.send_header("Content-Disposition", f'attachment; filename=\"{urllib.parse.quote(target.name)}\"")
+            ctype = "video/mp4" if ext in ("mp4","flv","3gp") else "audio/mpeg" if ext=="mp3" else "audio/mp4" if ext=="m4a" else "audio/wav"
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(target.stat().st_size))
             self.end_headers()
-            with open(outpath,"rb") as f: shutil.copyfileobj(f, self.wfile)
-            try: outpath.unlink()
+            with open(target,"rb") as f: shutil.copyfileobj(f, self.wfile)
+            try: target.unlink()
             except: pass
+            # nettoie autres fichiers du même stem
+            for p in DOWNLOADS.glob(f"{safe}.*"):
+                try:
+                    if p != target: p.unlink()
+                except: pass
         except Exception as e:
             print(e)
             if not self.wfile.closed: self.json(500, {"error": str(e)})
