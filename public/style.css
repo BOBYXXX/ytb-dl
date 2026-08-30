@@ -177,6 +177,13 @@ main{max-width:720px;margin:0 auto;padding:12px 20px 40px}
 .main-dl-btn:hover{background:var(--accent2)}
 .main-dl-btn:active{transform:scale(.99)}
 .main-dl-btn:disabled{opacity:.45;pointer-events:none}
+.progress-wrap{margin-top:14px}
+.progress-wrap.hidden{display:none}
+.progress-bar{height:6px;background:#0f0f0f;border:1px solid var(--border);border-radius:99px;overflow:hidden}
+.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:99px;transition:width .25s ease}
+.progress-fill.indeterminate{width:40% !important;animation:progIndet 1.1s ease-in-out infinite}
+@keyframes progIndet{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
+.progress-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted)}
 .dl-error{font-size:13px;color:#e85d4a;margin-top:10px;text-align:center;min-height:18px}
 .legal{margin-top:16px;font-size:11px;color:var(--dim);text-align:center;line-height:1.5}
 @media(max-width:560px){ .result-grid{flex-direction:column} .thumb-wrap{width:100%;height:180px}}

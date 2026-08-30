@@ -193,6 +193,11 @@ function updateHints(){
   }
 }
 
+const progressWrap = $('#progressWrap');
+const progressFill = $('#progressFill');
+const progressText = $('#progressText');
+const progressPercent = $('#progressPercent');
+
 mainDlBtn.addEventListener('click', async ()=>{
   dlError.textContent='';
   if(!selectedQuality){ dlError.textContent='Choisis une qualité.'; return; }
@@ -201,17 +206,51 @@ mainDlBtn.addEventListener('click', async ()=>{
   if(!fmt) fmt = allFormats.find(f=> f.ext.toLowerCase()===ext);
   if(!fmt){ dlError.textContent='Format indisponible.'; return; }
 
-  // TOUJOURS via serveur pour rester sur la page (pas de navigation googlevideo)
   mainDlBtn.disabled=true; mainDlBtn.innerHTML='<span>Préparation...</span>';
+  progressWrap.classList.remove('hidden');
+  progressFill.style.width='0%'; progressFill.classList.add('indeterminate');
+  progressText.textContent='Préparation sur le serveur (yt-dlp)...'; progressPercent.textContent='...';
+
   try{
     const res=await fetch('/api/download',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ url: urlInput.value.trim(), formatId: fmt.formatId, quality: fmt.quality||fmt.height+'p', filename: currentVideo.title }) });
     if(!res.ok){ const j=await res.json().catch(()=>({error:'Erreur serveur'})); throw new Error(j.error); }
-    const blob=await res.blob();
+
+    // phase 2: téléchargement vers le navigateur avec progression réelle
+    progressFill.classList.remove('indeterminate');
+    progressText.textContent='Téléchargement vers ton navigateur...';
+    const total = parseInt(res.headers.get('Content-Length')||'0',10);
     const cd=res.headers.get('Content-Disposition');
     let filename = `${(currentVideo.title||'video').replace(/[<>:"/\\|?*]/g,'').slice(0,80)}.${fmt.ext}`;
     if(cd){ const m=cd.match(/filename="(.+?)"/); if(m) filename=decodeURIComponent(m[1]); }
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+
+    if(!res.body || !total){
+      // fallback sans stream
+      const blob=await res.blob();
+      progressFill.style.width='100%'; progressPercent.textContent='100%';
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    } else {
+      const reader=res.body.getReader();
+      const chunks=[]; let received=0;
+      while(true){
+        const {done,value}=await reader.read();
+        if(done) break;
+        chunks.push(value); received+=value.length;
+        const pct=Math.round((received/total)*100);
+        progressFill.style.width=pct+'%'; progressPercent.textContent=pct+'%';
+      }
+      const blob=new Blob(chunks);
+      progressFill.style.width='100%'; progressPercent.textContent='100%';
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    }
+    progressText.textContent='✓ Terminé — regarde tes téléchargements';
     mainDlBtn.innerHTML='<span>✓ Téléchargé</span>';
-  }catch(e){ dlError.textContent=e.message; mainDlBtn.innerHTML='<span>Erreur</span>'; }
-  finally{ setTimeout(()=>{ mainDlBtn.disabled=false; mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'; },1800); }
+  }catch(e){ dlError.textContent=e.message; progressText.textContent='Erreur'; mainDlBtn.innerHTML='<span>Erreur</span>'; }
+  finally{
+    setTimeout(()=>{
+      mainDlBtn.disabled=false;
+      mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+      // laisse la barre 2s puis cache
+      setTimeout(()=>progressWrap.classList.add('hidden'), 2500);
+    },1200);
+  }
 });
