@@ -245,9 +245,43 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 except: pass
         except Exception as e:
             err = getattr(e, 'stderr', '') or str(e)
+            # fallback Piped si anti-bot (IP Render cramée) — tente de choper le lien direct sans passer par YouTube direct
+            if "Sign in to confirm" in err or "not a bot" in err:
+                try:
+                    import urllib.request as _ul2
+                    vid2 = extract_id(url)
+                    print(f"anti-bot sur {vid2}, fallback Piped")
+                    with _ul2.urlopen(f"https://pipedapi.kavin.rocks/streams/{vid2}", timeout=15) as pr:
+                        pj = json.loads(pr.read().decode())
+                    # Piped renvoie videoStreams / audioStreams
+                    streams = pj.get("videoStreams", []) + pj.get("audioStreams", [])
+                    # cherche le mp4 qui correspond à la qualité demandée
+                    h = None
+                    try: h = int(str(quality).replace('p','').split()[0])
+                    except: h = None
+                    best = None
+                    for s in pj.get("videoStreams", []):
+                        if s.get("mimeType","").startswith("video/mp4") and s.get("url"):
+                            sh = s.get("height") or 0
+                            if h and sh == h: best = s; break
+                            if not best or sh > (best.get("height") or 0): best = s
+                    if best and best.get("url"):
+                        durl = best["url"]
+                        print(f"Piped fallback ok {best.get('quality')} {durl[:80]}")
+                        with _ul2.urlopen(durl, timeout=60) as vr:
+                            self.send_response(200)
+                            self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(safe)}.{ext}"')
+                            self.send_header("Content-Type", "video/mp4")
+                            clen = vr.headers.get("Content-Length")
+                            if clen: self.send_header("Content-Length", clen)
+                            self.end_headers()
+                            shutil.copyfileobj(vr, self.wfile)
+                        return
+                except Exception as pe:
+                    print(f"Piped fallback failed: {pe}")
             print(f"download error: {e} stderr={err[:800]}")
             if "Sign in to confirm" in err or "not a bot" in err:
-                msg = "YouTube bloque cette vidéo (anti-bot) sur nos serveurs — même en 360p. Ce n'est pas un bug de qualité : 90% des autres vidéos passent en toutes qualités (teste dQw4w9WgXcQ). Pour celle-ci il faut des cookies YouTube, voir https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"
+                msg = "YouTube bloque cette vidéo sur nos serveurs US — Piped a aussi échoué. Essaie une autre vidéo publique, ou donne-moi un autre lien public qui bloque pour que je teste."
                 if not self.wfile.closed: self.json(500, {"error": msg})
             else:
                 if not self.wfile.closed: self.json(500, {"error": f"{e}\n{err[:600]}"})
