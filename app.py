@@ -123,13 +123,48 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(b)
 
     def do_GET(self):
+        # log pour debug Render
+        # print(f"GET {self.path} -> PUBLIC={PUBLIC} exists={PUBLIC.exists()} index={ (PUBLIC/'index.html').exists() }")
         if self.path.startswith("/api/"):
             return self.json(404, {"error":"not found"})
-        # serve index for SPA
-        p=PUBLIC / self.path.lstrip("/").split("?")[0]
-        if self.path in ("/","/index.html") or not p.exists() or p.is_dir():
-            self.path="/index.html"
-        return super().do_GET()
+        # clean path
+        req = self.path.split("?")[0].split("#")[0]
+        if req in ("/", "/index.html", ""):
+            # sert index.html directement (plus robuste que SimpleHTTPRequestHandler)
+            fp = PUBLIC / "index.html"
+            if fp.exists():
+                self.send_response(200)
+                self.send_header("Content-Type","text/html; charset=utf-8")
+                self.send_header("Content-Length", str(fp.stat().st_size))
+                self.end_headers()
+                with open(fp,"rb") as f: shutil.copyfileobj(f, self.wfile)
+                return
+            else:
+                # debug: liste les fichiers pour voir où on est
+                try:
+                    lst = os.listdir(str(PUBLIC)) if PUBLIC.exists() else os.listdir(".")
+                except Exception as e: lst = [str(e)]
+                return self.json(500, {"error": f"index.html introuvable. PUBLIC={PUBLIC} cwd={os.getcwd()} files={lst}"})
+        # fichiers statiques (style.css, app.js)
+        p = PUBLIC / req.lstrip("/")
+        if p.is_file():
+            ctype,_ = mimetypes.guess_type(str(p))
+            self.send_response(200)
+            self.send_header("Content-Type", ctype or "application/octet-stream")
+            self.send_header("Content-Length", str(p.stat().st_size))
+            self.end_headers()
+            with open(p,"rb") as f: shutil.copyfileobj(f, self.wfile)
+            return
+        # SPA fallback
+        fp = PUBLIC / "index.html"
+        if fp.exists():
+            self.send_response(200)
+            self.send_header("Content-Type","text/html; charset=utf-8")
+            self.send_header("Content-Length", str(fp.stat().st_size))
+            self.end_headers()
+            with open(fp,"rb") as f: shutil.copyfileobj(f, self.wfile)
+            return
+        return self.json(404, {"error": f"Not Found: {req}"})
 
 if __name__=="__main__":
     os.chdir(str(ROOT))
