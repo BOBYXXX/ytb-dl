@@ -141,7 +141,7 @@ function getFormatsForExtId(id){
   const entry = NOTUBE_EXTS.find(x=>x.id===id);
   const ext = entry?.ext || 'mp4';
   let filtered = allFormats.filter(f=>f.ext.toLowerCase()===ext);
-  // Switch "Toujours avec son" ne filtre plus — on garde 1080p/2K vidéo seule mais on les muxera côté serveur pour ajouter le son
+  // Toujours avec son: on garde tout, mais 1080p/2K vidéo seule sera muxé côté serveur (Docker ffmpeg) pour avoir le son
   // filtrage Notube-like par qualité
   if(id==='mp4') filtered = filtered.filter(f=>f.height && f.height<=480);
   if(id==='mp4_hd') filtered = filtered.filter(f=>f.height && f.height>=720 && f.height<=1080);
