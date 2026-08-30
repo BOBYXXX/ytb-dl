@@ -10,6 +10,12 @@ def extract_id(url):
     m = re.search(r'(?:youtube\.com/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be/)([^"&?\/\s]{11})', url)
     return m.group(1) if m else None
 
+def normalize_url(url):
+    vid = extract_id(url)
+    if vid:
+        return f"https://www.youtube.com/watch?v={vid}"
+    return url
+
 def sanitize(n):
     # nettoie accents + caractères interdits pour Render (ext4)
     import unicodedata
@@ -34,7 +40,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.json(404, {"error": "Not Found - endpoint inconnu. Vérifie que le backend tourne (Render Web Service, pas Static Site)"})
 
     def handle_info(self, data):
-        url = data.get("url","").strip()
+        url = normalize_url(data.get("url","").strip())
         if not url: return self.json(400, {"error":"URL requise"})
         vid = extract_id(url)
         if not vid: return self.json(400, {"error":"URL YouTube invalide"})
@@ -124,7 +130,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return self.json(200, payload)
 
     def handle_download(self, data):
-        url=data.get("url",""); fmt=data.get("formatId",""); quality=data.get("quality",""); fname=data.get("filename","video"); req_ext=(data.get("ext") or "").lower()
+        url=normalize_url(data.get("url","")); fmt=data.get("formatId",""); quality=data.get("quality",""); fname=data.get("filename","video"); req_ext=(data.get("ext") or "").lower()
         if not url or not fmt: return self.json(400, {"error":"URL et formatId requis"})
         vid=extract_id(url)
         if not vid: return self.json(400, {"error":"URL invalide"})
