@@ -155,14 +155,25 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             elif ext=="m4a":
                 cmd += ["--extract-audio","--audio-format","m4a"]
         else:
-            # video: FLV/3GP/MP4
+            # video: FLV/3GP/MP4 — si ffmpeg manquant, fallback sur best muxé sans merge
+            has_ffmpeg = shutil.which("ffmpeg") is not None
             selector=fmt if fmt=="bestaudio" else f"{fmt}+bestaudio/best"
             if ext=="flv":
-                cmd=["yt-dlp","-f",selector,"--merge-output-format","flv","--recode-video","flv","--no-warnings","-o",str(outpath),url]
+                if has_ffmpeg:
+                    cmd=["yt-dlp","-f",selector,"--merge-output-format","flv","--recode-video","flv","--no-warnings","-o",str(outpath),url]
+                else:
+                    cmd=["yt-dlp","-f","best[ext=flv]/best","--no-warnings","-o",str(outpath),url]
             elif ext=="3gp":
-                cmd=["yt-dlp","-f",selector,"--merge-output-format","3gp","--recode-video","3gp","--no-warnings","-o",str(outpath),url]
+                if has_ffmpeg:
+                    cmd=["yt-dlp","-f",selector,"--merge-output-format","3gp","--recode-video","3gp","--no-warnings","-o",str(outpath),url]
+                else:
+                    cmd=["yt-dlp","-f","best[ext=3gp]/best","--no-warnings","-o",str(outpath),url]
             else:
-                cmd=["yt-dlp","-f",selector,"--merge-output-format","mp4","--no-warnings","-o",str(outpath),url]
+                if has_ffmpeg:
+                    cmd=["yt-dlp","-f",selector,"--merge-output-format","mp4","--no-warnings","-o",str(outpath),url]
+                else:
+                    # sans ffmpeg: prend le best déjà muxé (22/18) avec son, pas besoin de merge
+                    cmd=["yt-dlp","-f","best[ext=mp4]/best","--no-warnings","-o",str(outpath),url]
         try:
             subprocess.check_call(cmd, timeout=300)
             # fichier peut avoir ext différente (conversion) → cherche le fichier créé
