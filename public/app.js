@@ -141,8 +141,7 @@ function getFormatsForExtId(id){
   const entry = NOTUBE_EXTS.find(x=>x.id===id);
   const ext = entry?.ext || 'mp4';
   let filtered = allFormats.filter(f=>f.ext.toLowerCase()===ext);
-  // Toujours avec son → exclut les vidéo seule (1080p/2K sans audio)
-  if(soundSwitch.checked) filtered = filtered.filter(f=> !f.height || f.hasAudio);
+  // Switch "Toujours avec son" ne filtre plus — on garde 1080p/2K vidéo seule mais on les muxera côté serveur pour ajouter le son
   // filtrage Notube-like par qualité
   if(id==='mp4') filtered = filtered.filter(f=>f.height && f.height<=480);
   if(id==='mp4_hd') filtered = filtered.filter(f=>f.height && f.height>=720 && f.height<=1080);
@@ -235,9 +234,11 @@ mainDlBtn.addEventListener('click', async ()=>{
   if(!fmt){ dlError.textContent='Format indisponible.'; return; }
   const extToSend = NOTUBE_EXTS.find(x=>x.id===selectedExtId)?.ext || fmt.ext;
 
-  // 100% navigateur: si on a un lien direct, on l'utilise (pas de passage serveur)
-  // Pour MP3/WAV/FLV/3GP sans lien direct (conversion), on informe que c'est impossible en 100% navigateur
-  if(fmt.url){
+  // Si muxé avec son et lien direct dispo → direct navigateur (rapide, reste sur la page, 0 serveur)
+  // Si vidéo seule (1080p/2K) et switch "toujours avec son" activé → on passe par le serveur pour muxer avec audio (sinon pas de son)
+  const needMux = fmt.height && !fmt.hasAudio;
+  const wantSound = soundSwitch.checked;
+  if(fmt.url && fmt.hasAudio && !['wav','flv','3gp'].includes(extToSend)){
     const safe = (currentVideo.title||'video').replace(/[<>:"/\\|?*]/g,'').slice(0,80).trim() || 'video';
     const filename = `${safe}.${fmt.ext}`;
     progressWrap.classList.remove('hidden');
@@ -250,9 +251,22 @@ mainDlBtn.addEventListener('click', async ()=>{
     setTimeout(()=>{ mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'; progressWrap.classList.add('hidden'); },3000);
     return;
   }
-  // Pas de lien direct → ce format nécessite une conversion serveur (FLV/3GP/WAV/MP3 HD sans URL)
-  if(['wav','flv','3gp'].includes(extToSend) || extToSend==='mp3'){
-    dlError.textContent='Ce format nécessite une conversion serveur — en mode 100% navigateur, choisis MP4 / M4A / MP3 direct. Désactive le mode ou contacte-nous pour activer la conversion.';
+  if(fmt.url && needMux && !wantSound){
+    // utilisateur veut la vidéo seule sans son → direct quand même
+    const safe = (currentVideo.title||'video').replace(/[<>:"/\\|?*]/g,'').slice(0,80).trim() || 'video';
+    const filename = `${safe}.${fmt.ext}`;
+    progressWrap.classList.remove('hidden');
+    progressFill.style.width='100%'; progressFill.classList.remove('indeterminate');
+    progressText.textContent='Lancement direct (vidéo seule)...'; progressPercent.textContent='sans son';
+    const a=document.createElement('a'); a.href=fmt.url; a.download=filename; a.style.display='none'; document.body.appendChild(a); a.click();
+    setTimeout(()=>a.remove(), 1000);
+    mainDlBtn.innerHTML='<span>✓ Lancé</span>';
+    setTimeout(()=>{ mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'; progressWrap.classList.add('hidden'); },3000);
+    return;
+  }
+  // Pas de lien direct ou besoin de mux avec son → fallback serveur (FLV/3GP/WAV/MP3 ou 1080p/2K avec son)
+  if(!fmt.url && ['wav','flv','3gp'].includes(extToSend)){
+    dlError.textContent='Ce format nécessite une conversion serveur — choisis MP4 / M4A pour du 100% navigateur, ou laisse le serveur faire la conversion.';
     progressWrap.classList.add('hidden'); mainDlBtn.disabled=false;
     mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
     return;

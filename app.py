@@ -10,7 +10,11 @@ def extract_id(url):
     m = re.search(r'(?:youtube\.com/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be/)([^"&?\/\s]{11})', url)
     return m.group(1) if m else None
 
-def sanitize(n): return re.sub(r'[<>:"/\\|?*\x00-\x1F]', '_', n).strip()[:120]
+def sanitize(n):
+    # nettoie accents + caractères interdits pour Render (ext4)
+    import unicodedata
+    n = unicodedata.normalize('NFKD', n).encode('ascii','ignore').decode('ascii')
+    return re.sub(r'[<>:"/\\|?*\x00-\x1F]', '_', n).strip()[:100] or "video"
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw): super().__init__(*a, directory=str(PUBLIC), **kw)
