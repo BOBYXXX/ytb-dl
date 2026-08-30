@@ -92,16 +92,32 @@
       <div class="formats-head">
         <span class="label-num">02</span>
         <span>Choisir le format & la qualité</span>
-        <span class="formats-count" id="formatsCount"></span>
       </div>
 
-      <div class="tabs">
-        <button class="tab active" data-tab="video">Vidéo</button>
-        <button class="tab" data-tab="audio">Audio seul</button>
+      <div class="select-row">
+        <div class="select-wrap">
+          <label for="extSelect">Extension</label>
+          <div class="select-box">
+            <select id="extSelect"></select>
+            <span class="select-arrow">▾</span>
+          </div>
+          <span class="select-hint" id="extHint"></span>
+        </div>
+        <div class="select-wrap">
+          <label for="qualitySelect">Qualité</label>
+          <div class="select-box">
+            <select id="qualitySelect"></select>
+            <span class="select-arrow">▾</span>
+          </div>
+          <span class="select-hint" id="qualityHint"></span>
+        </div>
       </div>
 
-      <div id="videoFormats" class="formats"></div>
-      <div id="audioFormats" class="formats hidden"></div>
+      <button id="mainDlBtn" class="main-dl-btn">
+        <span>Télécharger</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+      <div id="dlError" class="dl-error"></div>
 
       <p class="legal">Usage personnel uniquement. Respectez les droits d'auteur et les conditions d'utilisation de YouTube.</p>
     </div>

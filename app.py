@@ -62,6 +62,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                     break
                 fmts.sort(key=lambda x: -x["height"])
                 audios=[{"quality":"Audio uniquement","ext":f.get("ext","m4a"),"formatId":f["format_id"],"filesize":f.get("filesize"),"abr":f.get("abr"),"url": f.get("url")} for f in info.get("formats",[]) if f.get("acodec")!="none" and f.get("vcodec")=="none"]
+                # Ajout MP3 synthétique pour menu déroulant (conversion serveur)
+                if audios:
+                    audios.append({"quality":"Audio uniquement","ext":"mp3","formatId":"bestaudio","filesize":None,"abr":320,"url": None})
                 return self.json(200, {"id":vid,"title":info.get("title"),"thumbnail":info.get("thumbnail"),"duration":info.get("duration"),"uploader":info.get("uploader"),"viewCount":info.get("view_count"),"formats":fmts+audios, "direct": True})
             except Exception as e:
                 print("yt-dlp error:", e)
@@ -78,7 +81,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except:
             title=f"Vidéo {vid}"; thumb=f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"; uploader=""
         mock=[{"quality":"1080p","height":1080,"ext":"mp4","formatId":"137","filesize":85000000,"fps":30,"hasAudio":False,"url": None},{"quality":"720p","height":720,"ext":"mp4","formatId":"136","filesize":45000000,"fps":30,"hasAudio":True,"url": None},{"quality":"480p","height":480,"ext":"mp4","formatId":"135","filesize":22000000,"fps":30,"hasAudio":True,"url": None},{"quality":"360p","height":360,"ext":"mp4","formatId":"134","filesize":12000000,"fps":30,"hasAudio":True,"url": None}]
-        audios=[{"quality":"Audio uniquement","ext":"m4a","formatId":"140","filesize":5000000,"abr":128,"url": None}]
+        audios=[{"quality":"Audio uniquement","ext":"m4a","formatId":"140","filesize":5000000,"abr":128,"url": None},{"quality":"Audio uniquement","ext":"mp3","formatId":"bestaudio","filesize":5000000,"abr":320,"url": None}]
         note = "Mode démo — installe yt-dlp pour le téléchargement réel (voir README)" if not shutil.which("yt-dlp") else None
         payload={"id":vid,"title":title,"thumbnail":thumb,"duration":None,"uploader":uploader,"viewCount":None,"formats":mock+audios}
         if note: payload["demo"]=True; payload["note"]=note
