@@ -31,6 +31,7 @@ let currentVideo = null;
 let allFormats = [];
 let selectedExtId = 'mp4'; // mp3, mp3_hd, m4a, mp4, mp4_hd, mp4_2k, wav, 3gp, flv
 let selectedQuality = '';
+const soundSwitch = $('#soundSwitch');
 
 const NOTUBE_EXTS = [
   {id:'mp3', label:'MP3', ext:'mp3'},
@@ -140,6 +141,8 @@ function getFormatsForExtId(id){
   const entry = NOTUBE_EXTS.find(x=>x.id===id);
   const ext = entry?.ext || 'mp4';
   let filtered = allFormats.filter(f=>f.ext.toLowerCase()===ext);
+  // Toujours avec son → exclut les vidéo seule (1080p/2K sans audio)
+  if(soundSwitch.checked) filtered = filtered.filter(f=> !f.height || f.hasAudio);
   // filtrage Notube-like par qualité
   if(id==='mp4') filtered = filtered.filter(f=>f.height && f.height<=480);
   if(id==='mp4_hd') filtered = filtered.filter(f=>f.height && f.height>=720 && f.height<=1080);
@@ -150,17 +153,19 @@ function getFormatsForExtId(id){
   if(id==='flv') filtered = filtered.filter(f=>f.ext==='flv');
   if(id==='wav') filtered = filtered.filter(f=>f.ext==='wav');
   if(id==='m4a') filtered = filtered.filter(f=>f.ext==='m4a');
-  // fallback si filtre vide → prend tous du même ext
-  if(filtered.length===0) filtered = allFormats.filter(f=>f.ext.toLowerCase()===ext);
+  // fallback si filtre vide (ex: 2K sans son filtré) → message
   return filtered;
 }
+
+soundSwitch.addEventListener('change', ()=>{ buildQualityOptions(); });
 
 function buildQualityOptions(){
   const filtered = getFormatsForExtId(selectedExtId);
   if(filtered.length===0){
-    qualityDropdown.innerHTML='<div class="cs-option">Aucune qualité</div>';
+    const msg = soundSwitch.checked && ['mp4','mp4_hd','mp4_2k'].includes(selectedExtId) ? 'Aucune qualité avec son — désactive "Toujours avec son"' : 'Aucune qualité';
+    qualityDropdown.innerHTML=`<div class="cs-option">${msg}</div>`;
     qualityValue.textContent='—'; selectedQuality='';
-    mainDlBtn.disabled=true; extHint.textContent=''; qualityHint.textContent='';
+    mainDlBtn.disabled=true; extHint.textContent=soundSwitch.checked ? 'Filtrage son activé' : ''; qualityHint.textContent='';
     return;
   }
   mainDlBtn.disabled=false;
@@ -230,23 +235,30 @@ mainDlBtn.addEventListener('click', async ()=>{
   if(!fmt){ dlError.textContent='Format indisponible.'; return; }
   const extToSend = NOTUBE_EXTS.find(x=>x.id===selectedExtId)?.ext || fmt.ext;
 
-  // Direct client si muxé et URL dispo (MP4/WebM/M4A) → 0 bande passante serveur
-  if(fmt.url && fmt.hasAudio && !['mp3','wav','flv','3gp'].includes(extToSend)){
+  // 100% navigateur: si on a un lien direct, on l'utilise (pas de passage serveur)
+  // Pour MP3/WAV/FLV/3GP sans lien direct (conversion), on informe que c'est impossible en 100% navigateur
+  if(fmt.url){
     const safe = (currentVideo.title||'video').replace(/[<>:"/\\|?*]/g,'').slice(0,80).trim() || 'video';
     const filename = `${safe}.${fmt.ext}`;
     progressWrap.classList.remove('hidden');
     progressFill.style.width='100%'; progressFill.classList.remove('indeterminate');
-    progressText.textContent='Lancement direct...'; progressPercent.textContent='→ navigateur';
-    const iframe=document.createElement('iframe'); iframe.style.display='none'; iframe.src=fmt.url; document.body.appendChild(iframe);
-    const a=document.createElement('a'); a.href=fmt.url; a.download=filename; a.rel='noopener'; a.style.display='none'; document.body.appendChild(a); a.click();
-    setTimeout(()=>{ try{iframe.remove();}catch{}; a.remove(); },1500);
+    progressText.textContent='Lancement direct navigateur...'; progressPercent.textContent='100% navigateur';
+    const a=document.createElement('a'); a.href=fmt.url; a.download=filename; a.style.display='none'; document.body.appendChild(a); a.click();
+    setTimeout(()=>a.remove(), 1000);
     mainDlBtn.innerHTML='<span>✓ Lancé</span>';
-    progressText.textContent='✓ Téléchargement lancé';
+    progressText.textContent='✓ Téléchargement lancé — regarde tes téléchargements';
     setTimeout(()=>{ mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'; progressWrap.classList.add('hidden'); },3000);
     return;
   }
+  // Pas de lien direct → ce format nécessite une conversion serveur (FLV/3GP/WAV/MP3 HD sans URL)
+  if(['wav','flv','3gp'].includes(extToSend) || extToSend==='mp3'){
+    dlError.textContent='Ce format nécessite une conversion serveur — en mode 100% navigateur, choisis MP4 / M4A / MP3 direct. Désactive le mode ou contacte-nous pour activer la conversion.';
+    progressWrap.classList.add('hidden'); mainDlBtn.disabled=false;
+    mainDlBtn.innerHTML='<span>Télécharger</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+    return;
+  }
 
-  // Fallback serveur (conversion FLV/3GP/WAV/MP3 ou 1080p vidéo seule)
+  // Fallback serveur (si tu veux réactiver plus tard)
   mainDlBtn.disabled=true; mainDlBtn.innerHTML='<span>Préparation...</span>';
   progressWrap.classList.remove('hidden');
   progressFill.style.width='0%'; progressFill.classList.add('indeterminate');

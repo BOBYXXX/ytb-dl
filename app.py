@@ -169,7 +169,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if cands: target = max(cands, key=lambda p: p.stat().st_mtime)
                 else: raise FileNotFoundError(f"fichier non créé: {outpath}")
             self.send_response(200)
-            self.send_header("Content-Disposition", f'attachment; filename=\"{urllib.parse.quote(target.name)}\"")
+            self.send_header("Content-Disposition", f'attachment; filename="{urllib.parse.quote(target.name)}"')
             ctype = "video/mp4" if ext in ("mp4","flv","3gp") else "audio/mpeg" if ext=="mp3" else "audio/mp4" if ext=="m4a" else "audio/wav"
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(target.stat().st_size))
