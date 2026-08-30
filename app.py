@@ -188,9 +188,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     raise subprocess.CalledProcessError(proc.returncode, cmd, proc.stdout, proc.stderr)
             except (subprocess.CalledProcessError, FileNotFoundError) as e:
                 err = getattr(e, 'stderr', str(e)) or str(e)
-                print(f"yt-dlp merge failed ({e}), stderr={err[:500]}, retry best")
-                # fallback simple qui marche toujours, peu importe la qualité demandée
-                fallback = ["yt-dlp","-f","best","--no-warnings","-o",str(outpath),url]
+                print(f"yt-dlp merge failed ({e}), stderr={err[:800]}, retry best")
+                fallback = ["yt-dlp","-f","best","--no-warnings","--extractor-args","youtube:player_client=android","--geo-bypass","-o",str(outpath),url]
                 try:
                     proc2 = subprocess.run(fallback, timeout=300, capture_output=True, text=True)
                     if proc2.returncode != 0:
@@ -218,8 +217,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if p != target: p.unlink()
                 except: pass
         except Exception as e:
-            print(e)
-            if not self.wfile.closed: self.json(500, {"error": str(e)})
+            err = getattr(e, 'stderr', '') or str(e)
+            print(f"download error: {e} stderr={err[:800]}")
+            if not self.wfile.closed: self.json(500, {"error": f"{e}\n{err[:800]}"})
 
     def json(self, code, obj):
         b=json.dumps(obj, ensure_ascii=False).encode()
