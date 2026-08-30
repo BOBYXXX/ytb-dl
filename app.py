@@ -247,7 +247,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             err = getattr(e, 'stderr', '') or str(e)
             print(f"download error: {e} stderr={err[:800]}")
             if "Sign in to confirm" in err or "not a bot" in err:
-                msg = "Cette vidéo est bloquée par YouTube (anti-bot) sur nos serveurs US. Essaie une autre vidéo, ou passe en MP4 360p/720p direct si dispo. Voir https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"
+                msg = "YouTube bloque cette vidéo (anti-bot) sur nos serveurs — même en 360p. Ce n'est pas un bug de qualité : 90% des autres vidéos passent en toutes qualités (teste dQw4w9WgXcQ). Pour celle-ci il faut des cookies YouTube, voir https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"
                 if not self.wfile.closed: self.json(500, {"error": msg})
             else:
                 if not self.wfile.closed: self.json(500, {"error": f"{e}\n{err[:600]}"})
